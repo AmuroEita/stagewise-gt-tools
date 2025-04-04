@@ -1,107 +1,18 @@
-#include <memory>
-#include <vector>
-#include <string>
-#include <atomic>
-#include <mutex>
-#include <chrono>
-#include <algorithm>
-#include <numeric>
-#include <iostream>
-#include <exception>
-#include <thread>
-#include <queue>
-#include <cstdint>
-#include <fstream>
-#include <stdexcept>
-#include <sstream>
-#include <cstring> 
-#include <condition_variable>
+#include <vector>        
+#include <queue>          
+#include <thread>         
+#include <mutex>          
+#include <condition_variable> 
+#include <functional>     
+#include <atomic>         
+#include <memory>        
+#include <chrono>         
+#include <iostream>       
+#include <algorithm>      
+#include <numeric>        
+#include <cstdint>   
 
-template <typename T>
-inline void load_aligned_bin(const std::string &bin_file, T *&data, size_t &npts, size_t &dim, size_t &rounded_dim)
-{
-    std::ifstream reader;
-    reader.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-
-    try
-    {
-        std::cout << "Reading bin file " << bin_file << " ..." << std::flush;
-        reader.open(bin_file, std::ios::binary | std::ios::ate);
-
-        uint64_t actual_file_size = reader.tellg();
-        reader.seekg(0);
-
-        int npts_i32, dim_i32;
-        reader.read((char *)&npts_i32, sizeof(int));
-        reader.read((char *)&dim_i32, sizeof(int));
-        npts = static_cast<size_t>(npts_i32);
-        dim = static_cast<size_t>(dim_i32);
-
-        size_t expected_file_size = npts * dim * sizeof(T) + 2 * sizeof(uint32_t);
-        if (actual_file_size != expected_file_size)
-        {
-            std::stringstream stream;
-            stream << "Error: File size mismatch. Actual size is " << actual_file_size 
-                   << ", expected size is " << expected_file_size 
-                   << " (npts = " << npts << ", dim = " << dim << ", sizeof(T) = " << sizeof(T) << ")";
-            throw std::runtime_error(stream.str());
-        }
-
-        rounded_dim = (dim + 7) & ~7; 
-        std::cout << "Metadata: #pts = " << npts << ", #dims = " << dim 
-                  << ", aligned_dim = " << rounded_dim << "... " << std::flush;
-
-        size_t alloc_size = npts * rounded_dim * sizeof(T);
-        std::cout << "Allocating memory of " << alloc_size << " bytes... " << std::flush;
-        data = new T[npts * rounded_dim]; 
-        std::cout << "done. Copying data..." << std::flush;
-
-        for (size_t i = 0; i < npts; i++)
-        {
-            reader.read((char *)(data + i * rounded_dim), dim * sizeof(T));
-            std::memset(data + i * rounded_dim + dim, 0, (rounded_dim - dim) * sizeof(T));
-        }
-        std::cout << " done." << std::endl;
-    }
-    catch (const std::ios_base::failure &e)
-    {
-        std::stringstream stream;
-        stream << "Failed to read file " << bin_file << ": " << e.what();
-        throw std::runtime_error(stream.str());
-    }
-    catch (const std::exception &e)
-    {
-        throw; 
-    }
-}
-
-void get_bin_metadata(const std::string& filename, size_t& num_points, 
-                      size_t& dimensions, size_t offset) {
-    std::ifstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file: " + filename);
-    }
-
-    file.seekg(offset, std::ios::beg);
-    if (file.fail()) {
-        file.close();
-        throw std::runtime_error("Failed to seek to offset: " + std::to_string(offset));
-    }
-
-    uint32_t metadata[2];
-    file.read(reinterpret_cast<char*>(metadata), 2 * sizeof(uint32_t));
-    if (file.gcount() != 2 * sizeof(uint32_t)) {
-        file.close();
-        throw std::runtime_error("Failed to read metadata at offset: " + std::to_string(offset));
-    }
-
-    num_points = metadata[0];
-    dimensions = metadata[1];
-    std::cout << "File " << filename << " contains " << num_points << " points and "
-              << dimensions << " dimensions at offset " << offset << std::endl;
-
-    file.close();
-}
+#include "utils.hpp"     
 
 class ThreadPool {
 public:
@@ -170,19 +81,11 @@ public:
     virtual void search_with_tags(const T* query, size_t k, size_t Ls, TagT* tags, std::vector<T*>& res) = 0;
 };
 
-template <typename TagT>
-struct SearchResult {
-    size_t insert_offset;
-    size_t query_idx;
-    std::vector<TagT> tags;
-    SearchResult(size_t offset, size_t idx, const std::vector<TagT>& t) 
-        : insert_offset(offset), query_idx(idx), tags(t) {}
-};
-
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string& data_path, const std::string& query_file, const size_t begin_num,
                       const float write_ratio, const size_t batch_size, const uint32_t recall_at, const uint32_t Ls,
-                      const uint32_t num_threads, std::unique_ptr<IndexBase<T, TagT, LabelT>>&& index)
+                      const uint32_t num_threads, std::unique_ptr<IndexBase<T, TagT, LabelT>>&& index, 
+                      const std::string& res_path)
 {
     std::cout << "Starting concurrent benchmarking with #threads: " << num_threads 
               << " #ratio: " << write_ratio << ":" << 1 - write_ratio << std::endl;

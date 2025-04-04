@@ -121,8 +121,8 @@ std::vector<std::vector<uint8_t>> read_fvecs(const std::string& filename) {
     return data;
 }
 
-void save_to_custom_format(const std::vector<std::vector<std::vector<PointPair>>>& all_batches, 
-                           const std::string& filename, int k) {
+void save_to_bin(const std::vector<std::vector<std::vector<PointPair>>>& all_batches, 
+                 const std::string& filename, int k) {
     std::ofstream out(filename, std::ios::binary);
     if (!out.is_open()) throw std::runtime_error("Failed to open file: " + filename);
 
@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
         all_batches.push_back(batch_gt);
     }
 
-    save_to_custom_format(all_batches, args.gt_path, args.k);
+    save_to_bin(all_batches, args.gt_path, args.k);
 
     return 0;
 }

@@ -11,5 +11,6 @@ endif()
 
 add_executable(compute_gt compute_gt.cpp)
 add_executable(crop crop.cpp)
+add_executable(check_recall check_recall.cpp)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

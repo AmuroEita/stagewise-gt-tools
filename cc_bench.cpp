@@ -1,5 +1,4 @@
 #include "bench.hpp"
-#include "algorithms/base.hpp"
 
 #include <iostream>
 #include <string>

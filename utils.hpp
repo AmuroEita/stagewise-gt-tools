@@ -8,6 +8,23 @@
 #include <cstdint>
 #include <cstring>
 
+template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
+class IndexBase {
+public:
+    virtual ~IndexBase() = default;
+    void build(T* data, size_t num_points, const std::vector<TagT>& tags) {
+
+    }
+
+    int insert_point(T* point, TagT tag) { 
+        return 0; 
+    }
+
+    void search_with_tags(const T* query, size_t k, size_t Ls, TagT* tags, std::vector<T*>& res) {
+        
+    }
+};
+
 template <typename TagT>
 struct SearchResult {
     size_t insert_offset;
@@ -166,7 +183,7 @@ inline void load_aligned_bin(const std::string &bin_file, T *&data, size_t &npts
 }
 
 void get_bin_metadata(const std::string& filename, size_t& num_points, 
-                      size_t& dimensions, size_t offset) {
+                      size_t& dimensions, size_t offset = 0) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open file: " + filename);

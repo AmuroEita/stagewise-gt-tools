@@ -11,6 +11,9 @@
 #include <algorithm>      
 #include <numeric>        
 #include <cstdint>   
+#include <sys/resource.h>
+#include <papi.h>
+#include <functional>
 
 #include "utils.hpp"     
 
@@ -73,19 +76,10 @@ private:
 };
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
-class IndexBase {
-public:
-    virtual ~IndexBase() = default;
-    virtual void build(T* data, size_t num_points, const std::vector<TagT>& tags) = 0;
-    virtual int insert_point(T* point, TagT tag) = 0;
-    virtual void search_with_tags(const T* query, size_t k, size_t Ls, TagT* tags, std::vector<T*>& res) = 0;
-};
-
-template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string& data_path, const std::string& query_file, const size_t begin_num,
                       const float write_ratio, const size_t batch_size, const uint32_t recall_at, const uint32_t Ls,
                       const uint32_t num_threads, std::unique_ptr<IndexBase<T, TagT, LabelT>>&& index, 
-                      const std::string& res_path)
+                      const std::string& res_path, std::vector<SearchResult<TagT>>& search_results)
 {
     std::cout << "Starting concurrent benchmarking with #threads: " << num_threads 
               << " #ratio: " << write_ratio << ":" << 1 - write_ratio << std::endl;
@@ -113,7 +107,6 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
     std::exception_ptr last_exception = nullptr;
     std::mutex last_except_mutex, result_mutex, insert_latency_mutex, search_latency_mutex;
     std::vector<double> insert_latency_stats, search_latency_stats;
-    std::vector<SearchResult<T>> search_results;
     ThreadPool pool(num_threads);
 
     auto succeed_insert_count = std::make_shared<std::atomic<size_t>>(0);
@@ -166,7 +159,7 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
                     std::vector<TagT> query_result_tags(recall_at);
                     std::vector<T*> res;
                     index->search_with_tags(query + query_idx * query_aligned_dim, recall_at, Ls, 
-                                            query_result_tags.data(), nullptr, res);
+                                            query_result_tags.data(), res);
                     search_results.emplace_back(end_search_offset, query_idx, query_result_tags);
 
                     auto qe = std::chrono::high_resolution_clock::now();
@@ -221,8 +214,50 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
 
     delete[] data;
     delete[] query;
-    
-    write_results(search_results, res_path);
 
     return true;
+}
+
+void handle_PAPI_error(int retval) {
+    if (retval != PAPI_OK) {
+        std::cerr << "PAPI error: " << PAPI_strerror(retval) << std::endl;
+        exit(1);
+    }
+}
+
+long get_peak_memory() {
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    return usage.ru_maxrss; 
+}
+
+void measure_performance(const std::function<void()>& task, bool useL3 = true) {
+    int retval = PAPI_library_init(PAPI_VER_CURRENT);
+    if (retval != PAPI_VER_CURRENT) {
+        std::cerr << "PAPI library init error!" << std::endl;
+        exit(1);
+    }
+
+    int events[2] = {PAPI_RES_STL, useL3 ? PAPI_L3_TCM : PAPI_L1_DCM}; 
+    long long values[2] = {0, 0};
+    int event_set = PAPI_NULL;
+
+    handle_PAPI_error(PAPI_create_eventset(&event_set));
+    handle_PAPI_error(PAPI_add_events(event_set, events, 2));
+    handle_PAPI_error(PAPI_start(event_set));
+    task();
+    handle_PAPI_error(PAPI_stop(event_set, values));
+
+    long peakMemoryKB = get_peak_memory();
+
+    std::cout << "Resource Stall Cycles: " << values[0] << std::endl;
+    if (useL3) 
+        std::cout << "L3 Total Cache Misses: " << values[1] << std::endl;
+    else 
+        std::cout << "L1 Data Cache Misses: " << values[1] << std::endl;
+    std::cout << "Peak Memory Usage: " << peakMemoryKB << " KB" << std::endl;
+
+    PAPI_cleanup_eventset(event_set);
+    PAPI_destroy_eventset(&event_set);
+    PAPI_shutdown();
 }

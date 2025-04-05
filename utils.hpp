@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -29,7 +31,7 @@ public:
         return 0; 
     }
 
-    void search_with_tags(const T* query, size_t k, size_t Ls, TagT* tags, std::vector<T*>& res) {
+    void search_with_tags(const T* query, size_t k, size_t Ls, std::vector<TagT>& res_tags) {
         
     }
 };

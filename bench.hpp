@@ -157,9 +157,7 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
                 {
                     auto qs = std::chrono::high_resolution_clock::now();
                     std::vector<TagT> query_result_tags(recall_at);
-                    std::vector<T*> res;
-                    index->search_with_tags(query + query_idx * query_aligned_dim, recall_at, Ls, 
-                                            query_result_tags.data(), res);
+                    index->search_with_tags(query + query_idx * query_aligned_dim, recall_at, Ls, query_result_tags);
                     search_results.emplace_back(end_search_offset, query_idx, query_result_tags);
 
                     auto qe = std::chrono::high_resolution_clock::now();

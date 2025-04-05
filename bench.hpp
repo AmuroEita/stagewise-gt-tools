@@ -95,7 +95,7 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
     load_aligned_bin(data_path, data, data_num, data_dim, aligned_dim);
 
     std::vector<uint32_t> tags(begin_num);
-    std::iota(tags.begin(), tags.end(), 1 + static_cast<uint32_t>(0));
+    std::iota(tags.begin(), tags.end(), static_cast<uint32_t>(0));
     index->build(data, begin_num, tags);
 
     size_t insert_total = data_num - begin_num;
@@ -124,8 +124,8 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
                 try
                 {
                     auto qs = std::chrono::high_resolution_clock::now();
-                    int insert_result = index->insert_point(&data[(idx + begin_num) * aligned_dim],
-                                                            1 + static_cast<TagT>(idx + begin_num));
+                    int insert_result = index->insert_point(&data[(idx + begin_num) * aligned_dim], 
+                                                            static_cast<TagT>(idx + begin_num));
                     if (insert_result != 0)
                         failed_insert_count->fetch_add(1, std::memory_order_seq_cst);
                     else
@@ -158,8 +158,6 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
                     auto qs = std::chrono::high_resolution_clock::now();
                     std::vector<TagT> query_result_tags(recall_at);
                     index->search_with_tags(query + query_idx * query_aligned_dim, recall_at, Ls, query_result_tags);
-                    search_results.emplace_back(end_search_offset, query_idx, query_result_tags);
-
                     auto qe = std::chrono::high_resolution_clock::now();
                     std::chrono::duration<double> diff = qe - qs;
                     {
@@ -230,30 +228,23 @@ long get_peak_memory() {
 }
 
 void measure_performance(const std::function<void()>& task, bool useL3 = true) {
-    int retval = PAPI_library_init(PAPI_VER_CURRENT);
-    if (retval != PAPI_VER_CURRENT) {
-        std::cerr << "PAPI library init error!" << std::endl;
-        exit(1);
-    }
-
-    int events[2] = {PAPI_RES_STL, useL3 ? PAPI_L3_TCM : PAPI_L1_DCM}; 
-    long long values[2] = {0, 0};
+    int events[1] = {useL3 ? PAPI_L3_TCM : PAPI_L1_DCM}; 
+    long long values[1] = {0};                           
     int event_set = PAPI_NULL;
 
     handle_PAPI_error(PAPI_create_eventset(&event_set));
-    handle_PAPI_error(PAPI_add_events(event_set, events, 2));
+    handle_PAPI_error(PAPI_add_events(event_set, events, 1)); 
     handle_PAPI_error(PAPI_start(event_set));
     task();
     handle_PAPI_error(PAPI_stop(event_set, values));
 
-    long peakMemoryKB = get_peak_memory();
+    long peak_mem = get_peak_memory();
 
-    std::cout << "Resource Stall Cycles: " << values[0] << std::endl;
     if (useL3) 
-        std::cout << "L3 Total Cache Misses: " << values[1] << std::endl;
+        std::cout << "L3 Total Cache Misses: " << values[0] << std::endl;
     else 
-        std::cout << "L1 Data Cache Misses: " << values[1] << std::endl;
-    std::cout << "Peak Memory Usage: " << peakMemoryKB << " KB" << std::endl;
+        std::cout << "L1 Data Cache Misses: " << values[0] << std::endl;
+    std::cout << "Peak Memory Usage: " << peak_mem << " KB" << std::endl;
 
     PAPI_cleanup_eventset(event_set);
     PAPI_destroy_eventset(&event_set);

@@ -16,6 +16,7 @@
 #include <functional>
 
 #include "utils.hpp"     
+#include "algorithms/base.hpp"
 
 class ThreadPool {
 public:

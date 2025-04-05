@@ -75,7 +75,6 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res, std::vector<SearchR
       const auto& gt_tags = gt_map[offset][qidx];
       const auto& res_tags = res_entry.tags;
 
-      // 计算命中数
       size_t hits = 0;
       for (uint32_t tag : res_tags) {
           if (std::find(gt_tags.begin(), gt_tags.end(), tag) != gt_tags.end()) {

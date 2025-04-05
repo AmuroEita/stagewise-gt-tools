@@ -113,7 +113,7 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
     std::exception_ptr last_exception = nullptr;
     std::mutex last_except_mutex, result_mutex, insert_latency_mutex, search_latency_mutex;
     std::vector<double> insert_latency_stats, search_latency_stats;
-    std::vector<SearchResult<uint32_t>> search_results;
+    std::vector<SearchResult<T>> search_results;
     ThreadPool pool(num_threads);
 
     auto succeed_insert_count = std::make_shared<std::atomic<size_t>>(0);
@@ -167,6 +167,7 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
                     std::vector<T*> res;
                     index->search_with_tags(query + query_idx * query_aligned_dim, recall_at, Ls, 
                                             query_result_tags.data(), nullptr, res);
+                    search_results.emplace_back(end_search_offset, query_idx, query_result_tags);
 
                     auto qe = std::chrono::high_resolution_clock::now();
                     std::chrono::duration<double> diff = qe - qs;
@@ -220,5 +221,8 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
 
     delete[] data;
     delete[] query;
+    
+    write_results(search_results, res_path);
+
     return true;
 }

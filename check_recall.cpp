@@ -156,8 +156,9 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        std::vector<SearchResult<uint32_t>> res = load_search_result(res_path);
-        std::vector<SearchResult<uint32_t>> gt = load_search_result(gt_path);
+        std::vector<SearchResult<uint32_t>> res, gt; 
+        read_results(res, res_path);
+        read_results(gt, gt_path);
 
         float recall = check_recall(res, gt, recall_path);
         std::cout << "Final average recall: " << recall << std::endl;

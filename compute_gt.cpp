@@ -165,11 +165,11 @@ Args parse_args(int argc, char* argv[]) {
     Args args;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "-base_path" && i + 1 < argc) args.base_path = argv[++i];
-        else if (arg == "-query_path" && i + 1 < argc) args.query_path = argv[++i];
-        else if (arg == "-gt_path" && i + 1 < argc) args.gt_path = argv[++i];
-        else if (arg == "-data_type" && i + 1 < argc) args.data_type = argv[++i];
-        else if (arg == "-k" && i + 1 < argc) args.k = std::stoi(argv[++i]);
+        if (arg == "--base_path" && i + 1 < argc) args.base_path = argv[++i];
+        else if (arg == "--query_path" && i + 1 < argc) args.query_path = argv[++i];
+        else if (arg == "--gt_path" && i + 1 < argc) args.gt_path = argv[++i];
+        else if (arg == "--data_type" && i + 1 < argc) args.data_type = argv[++i];
+        else if (arg == "--k" && i + 1 < argc) args.k = std::stoi(argv[++i]);
     }
     return args;
 }

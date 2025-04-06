@@ -103,10 +103,37 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res, std::vector<SearchR
                   << " chunks completed (" << std::fixed << std::setprecision(2) << progress << "%)" << std::endl;
     }
 
-    if (valid_entries == 0) {
-        std::cerr << "Error: No valid entries to compute recall" << std::endl;
-        return 0.0f;
+    float recall = static_cast<float>(hits) / res_tags.size();
+    total_recall += recall;
+    valid_entries++;
+
+    batch_recall_sum[offset] += recall;
+    batch_entry_count[offset]++;
+  }
+
+  if (valid_entries == 0) {
+    std::cerr << "Error: No valid entries to compute recall" << std::endl;
+    return 0.0f;
+  }
+
+  float average_recall = total_recall / valid_entries;
+
+  std::ofstream out_file(recall_path);
+  if (!out_file.is_open()) {
+    std::cerr << "Error: Failed to open recall output file: " << recall_path
+              << std::endl;
+  } else {
+    out_file << "Batch Offset\tAverage Recall\tEntry Count\n";
+    for (const auto &[offset, recall_sum] : batch_recall_sum) {
+      float batch_avg_recall = recall_sum / batch_entry_count[offset];
+      out_file << offset << "\t" << batch_avg_recall << "\t"
+               << batch_entry_count[offset] << "\n";
+      std::cout << "Batch " << offset
+                << ": Average recall = " << batch_avg_recall << " ("
+                << batch_entry_count[offset] << " entries)" << std::endl;
     }
+    out_file.close();
+  }
 
     float average_recall = total_recall / valid_entries;
 
@@ -135,8 +162,8 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res, std::vector<SearchR
     return average_recall;
 }
 
-int main(int argc, char* argv[]) {
-    std::string res_path, gt_path, recall_path;
+int main(int argc, char *argv[]) {
+  std::string res_path, gt_path, recall_path;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -148,23 +175,24 @@ int main(int argc, char* argv[]) {
             recall_path = argv[++i];
         }
     }
+  }
 
-    if (res_path.empty() || gt_path.empty() || recall_path.empty()) {
-        std::cerr << "Error: Missing --res_path, --gt_path, or --recall_path" << std::endl;
-        return 1;
-    }
+  if (res_path.empty() || gt_path.empty() || recall_path.empty()) {
+    std::cerr << "Error: Missing --res_path, --gt_path, or --recall_path"
+              << std::endl;
+    return 1;
+  }
 
     try {
         std::vector<SearchResult<uint32_t>> res, gt; 
         read_results(res, res_path);
         read_results(gt, gt_path);
+    float recall = check_recall(res, gt, recall_path);
+    std::cout << "Final average recall: " << recall << std::endl;
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+    return 1;
+  }
 
-        float recall = check_recall(res, gt, recall_path);
-        std::cout << "Final average recall: " << recall << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
-    }
-
-    return 0;
+  return 0;
 }

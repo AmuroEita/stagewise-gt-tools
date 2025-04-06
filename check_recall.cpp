@@ -1,11 +1,11 @@
-#include <fstream>
-#include <future>
-#include <iomanip>
-#include <map>
-#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <fstream>
+#include <sstream>
+#include <future>
 #include <vector>
+#include <iomanip>
+#include <map>
 
 #include "utils.hpp"
 
@@ -16,12 +16,9 @@ struct ThreadResult {
     std::unordered_map<size_t, size_t> batch_entry_count;
 };
 
-ThreadResult process_chunk(
-    const std::vector<SearchResult<uint32_t>>& res,
-    const std::unordered_map<
-        size_t, std::unordered_map<size_t, std::unordered_set<uint32_t>>>&
-        gt_map,
-    size_t start, size_t end) {
+ThreadResult process_chunk(const std::vector<SearchResult<uint32_t>>& res,
+                          const std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<uint32_t>>>& gt_map,
+                          size_t start, size_t end) {
     ThreadResult result;
     result.batch_recall_sum.reserve(end - start);
     result.batch_entry_count.reserve(end - start);
@@ -32,12 +29,12 @@ ThreadResult process_chunk(
         size_t qidx = res_entry.query_idx;
 
         if (gt_map.count(offset) == 0 || gt_map.at(offset).count(qidx) == 0) {
-            std::cerr << "Warning: No matching ground truth for offset "
-                      << offset << ", query " << qidx << std::endl;
+            std::cerr << "Warning: No matching ground truth for offset " << offset 
+                      << ", query " << qidx << std::endl;
             continue;
         }
 
-        const auto& gt_tags = gt_map.at(offset).at(qidx);
+        const auto& gt_tags = gt_map.at(offset).at(qidx); 
         const auto& res_tags = res_entry.tags;
         size_t tags_size = res_tags.size();
         if (tags_size == 0) continue;
@@ -60,16 +57,11 @@ ThreadResult process_chunk(
     return result;
 }
 
-float check_recall(std::vector<SearchResult<uint32_t>>& res,
-                   std::vector<SearchResult<uint32_t>>& gt,
-                   const std::string& recall_path) {
-    std::unordered_map<size_t,
-                       std::unordered_map<size_t, std::unordered_set<uint32_t>>>
-        gt_map;
+float check_recall(std::vector<SearchResult<uint32_t>>& res, std::vector<SearchResult<uint32_t>>& gt, const std::string& recall_path) {
+    std::unordered_map<size_t, std::unordered_map<size_t, std::unordered_set<uint32_t>>> gt_map;
     gt_map.reserve(gt.size());
     for (const auto& gt_entry : gt) {
-        gt_map[gt_entry.insert_offset][gt_entry.query_idx].insert(
-            gt_entry.tags.begin(), gt_entry.tags.end());
+        gt_map[gt_entry.insert_offset][gt_entry.query_idx].insert(gt_entry.tags.begin(), gt_entry.tags.end());
     }
 
     size_t thread_count = std::thread::hardware_concurrency();
@@ -80,11 +72,10 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
     std::vector<std::future<ThreadResult>> futures;
     for (size_t i = 0; i < res.size(); i += chunk_size) {
         size_t end = std::min(i + chunk_size, res.size());
-        futures.push_back(std::async(std::launch::async, process_chunk,
-                                     std::cref(res), std::cref(gt_map), i,
-                                     end));
+        futures.push_back(std::async(std::launch::async, process_chunk, std::cref(res), std::cref(gt_map), i, end));
     }
 
+    // 合并线程结果并打印进度
     float total_recall = 0.0f;
     size_t valid_entries = 0;
     std::unordered_map<size_t, float> batch_recall_sum;
@@ -108,75 +99,41 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
         }
 
         completed_chunks++;
-        float progress =
-            static_cast<float>(completed_chunks) / total_chunks * 100.0f;
-        std::cout << "Progress: " << completed_chunks << "/" << total_chunks
-                  << " chunks completed (" << std::fixed << std::setprecision(2)
-                  << progress << "%)" << std::endl;
+        float progress = static_cast<float>(completed_chunks) / total_chunks * 100.0f;
+        std::cout << "Progress: " << completed_chunks << "/" << total_chunks 
+                  << " chunks completed (" << std::fixed << std::setprecision(2) << progress << "%)" << std::endl;
     }
 
-    float recall = static_cast<float>(hits) / res_tags.size();
-    total_recall += recall;
-    valid_entries++;
-
-    batch_recall_sum[offset] += recall;
-    batch_entry_count[offset]++;
-}
-
-if (valid_entries == 0) {
-    std::cerr << "Error: No valid entries to compute recall" << std::endl;
-    return 0.0f;
-}
-
-float average_recall = total_recall / valid_entries;
-
-std::ofstream out_file(recall_path);
-if (!out_file.is_open()) {
-    std::cerr << "Error: Failed to open recall output file: " << recall_path
-              << std::endl;
-} else {
-    out_file << "Batch Offset\tAverage Recall\tEntry Count\n";
-    for (const auto& [offset, recall_sum] : batch_recall_sum) {
-        float batch_avg_recall = recall_sum / batch_entry_count[offset];
-        out_file << offset << "\t" << batch_avg_recall << "\t"
-                 << batch_entry_count[offset] << "\n";
-        std::cout << "Batch " << offset
-                  << ": Average recall = " << batch_avg_recall << " ("
-                  << batch_entry_count[offset] << " entries)" << std::endl;
+    if (valid_entries == 0) {
+        std::cerr << "Error: No valid entries to compute recall" << std::endl;
+        return 0.0f;
     }
-    out_file.close();
-}
 
-float average_recall = total_recall / valid_entries;
+    float average_recall = total_recall / valid_entries;
 
-std::map<size_t, float> sorted_batch_recall_sum(batch_recall_sum.begin(),
-                                                batch_recall_sum.end());
-std::map<size_t, size_t> sorted_batch_entry_count(batch_entry_count.begin(),
-                                                  batch_entry_count.end());
+    std::map<size_t, float> sorted_batch_recall_sum(batch_recall_sum.begin(), batch_recall_sum.end());
+    std::map<size_t, size_t> sorted_batch_entry_count(batch_entry_count.begin(), batch_entry_count.end());
 
-std::stringstream ss;
-ss << "Batch Offset\tAverage Recall\tEntry Count\n";
-for (const auto& [offset, recall_sum] : sorted_batch_recall_sum) {
-    float batch_avg_recall = recall_sum / sorted_batch_entry_count[offset];
-    ss << offset << "\t" << batch_avg_recall << "\t"
-       << sorted_batch_entry_count[offset] << "\n";
-    std::cout << "Batch " << offset << ": Average recall = " << batch_avg_recall
-              << " (" << sorted_batch_entry_count[offset] << " entries)"
-              << std::endl;
-}
+    std::stringstream ss;
+    ss << "Batch Offset\tAverage Recall\tEntry Count\n";
+    for (const auto& [offset, recall_sum] : sorted_batch_recall_sum) {
+        float batch_avg_recall = recall_sum / sorted_batch_entry_count[offset];
+        ss << offset << "\t" << batch_avg_recall << "\t" << sorted_batch_entry_count[offset] << "\n";
+        std::cout << "Batch " << offset << ": Average recall = " << batch_avg_recall 
+                  << " (" << sorted_batch_entry_count[offset] << " entries)" << std::endl;
+    }
 
-std::ofstream out_file(recall_path);
-if (!out_file.is_open()) {
-    std::cerr << "Error: Failed to open recall output file: " << recall_path
-              << std::endl;
-} else {
-    out_file << ss.str();
-    out_file.close();
-}
+    std::ofstream out_file(recall_path);
+    if (!out_file.is_open()) {
+        std::cerr << "Error: Failed to open recall output file: " << recall_path << std::endl;
+    } else {
+        out_file << ss.str();
+        out_file.close();
+    }
 
-std::cout << "Computed recall for " << valid_entries
-          << " entries, average recall: " << average_recall << std::endl;
-return average_recall;
+    std::cout << "Computed recall for " << valid_entries << " entries, average recall: " 
+              << average_recall << std::endl;
+    return average_recall;
 }
 
 int main(int argc, char* argv[]) {
@@ -192,24 +149,22 @@ int main(int argc, char* argv[]) {
             recall_path = argv[++i];
         }
     }
-}
 
-if (res_path.empty() || gt_path.empty() || recall_path.empty()) {
-    std::cerr << "Error: Missing --res_path, --gt_path, or --recall_path"
-              << std::endl;
-    return 1;
-}
+    if (res_path.empty() || gt_path.empty() || recall_path.empty()) {
+        std::cerr << "Error: Missing --res_path, --gt_path, or --recall_path" << std::endl;
+        return 1;
+    }
 
-try {
-    std::vector<SearchResult<uint32_t>> res, gt;
-    read_results(res, res_path);
-    read_results(gt, gt_path);
-    float recall = check_recall(res, gt, recall_path);
-    std::cout << "Final average recall: " << recall << std::endl;
-} catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-    return 1;
-}
+    try {
+        std::vector<SearchResult<uint32_t>> res = load_search_result(res_path);
+        std::vector<SearchResult<uint32_t>> gt = load_search_result(gt_path);
 
-return 0;
+        float recall = check_recall(res, gt, recall_path);
+        std::cout << "Final average recall: " << recall << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
 }

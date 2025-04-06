@@ -27,6 +27,7 @@ add_executable(compute_gt compute_gt.cpp)
 add_executable(crop crop.cpp)
 add_executable(check_recall check_recall.cpp)
 add_executable(cc_bench cc_bench.cpp)
+add_executable(fvecs_to_bin fvecs_to_bin.cpp)
 
 target_include_directories(cc_bench PRIVATE ${PAPI_INCLUDE_DIR})
 target_link_libraries(cc_bench PRIVATE ${PAPI_LIBRARY})

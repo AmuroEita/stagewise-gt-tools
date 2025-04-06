@@ -166,7 +166,7 @@ bool concurrent_bench(const std::string& data_path, const std::string& query_fil
                     }
                     {
                         std::unique_lock<std::mutex> lock(result_mutex);
-                        search_results.emplace_back(end_insert_offset, query_idx, query_result_tags);
+                        search_results.emplace_back(end_insert_offset * batch_size, query_idx, query_result_tags);
                     }
                 }
                 catch (...)

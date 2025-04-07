@@ -85,7 +85,6 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
                                      end));
     }
 
-    // 合并线程结果并打印进度
     float total_recall = 0.0f;
     size_t valid_entries = 0;
     std::unordered_map<size_t, float> batch_recall_sum;
@@ -175,9 +174,12 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        std::vector<SearchResult<uint32_t>> res, gt;
+        using TagT = uint32_t;
+
+        std::vector<SearchResult<TagT>> res, gt;
         read_results(res, res_path);
-        read_results(gt, gt_path);
+
+        load_gt<TagT>(gt, gt_path);
 
         float recall = check_recall(res, gt, recall_path);
         std::cout << "Final average recall: " << recall << std::endl;

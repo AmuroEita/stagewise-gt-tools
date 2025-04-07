@@ -94,7 +94,8 @@ bool concurrent_bench(const std::string &data_path,
 
     size_t query_num, query_dim, query_aligned_dim;
     T *raw_query = nullptr;
-    load_aligned_bin(query_file, raw_query, query_num, query_dim, query_aligned_dim);
+    load_aligned_bin(query_file, raw_query, query_num, query_dim,
+                     query_aligned_dim);
     auto query = std::unique_ptr<T[]>(raw_query);
 
     T *raw_data = nullptr;
@@ -104,7 +105,7 @@ bool concurrent_bench(const std::string &data_path,
     std::vector<uint32_t> tags(begin_num);
     std::iota(tags.begin(), tags.end(), static_cast<uint32_t>(0));
     index->build(data.get(), begin_num, tags);
-    
+
     size_t insert_total = data_num - begin_num;
     size_t search_total = insert_total * ((1 - write_ratio) / write_ratio);
     size_t search_batch_size = batch_size * ((1 - write_ratio) / write_ratio);
@@ -127,7 +128,8 @@ bool concurrent_bench(const std::string &data_path,
            end_search_offset < search_total) {
         end_insert_offset =
             std::min(start_insert_offset + batch_size, insert_total);
-        std::cout << "Inserting with insert_offset=" << begin_num + end_insert_offset << std::endl;
+        std::cout << "Inserting with insert_offset="
+                  << begin_num + end_insert_offset << std::endl;
 
         for (size_t idx = start_insert_offset; idx < end_insert_offset; ++idx) {
             pool.enqueue_task([&, idx] {
@@ -170,8 +172,8 @@ bool concurrent_bench(const std::string &data_path,
                     std::vector<TagT> query_result_tags;
                     query_result_tags.reserve(recall_at);
                     index->search_with_tags(
-                        query.get() + query_idx * query_aligned_dim, recall_at, Ls,
-                        query_result_tags);
+                        query.get() + query_idx * query_aligned_dim, recall_at,
+                        Ls, query_result_tags);
                     auto qe = std::chrono::high_resolution_clock::now();
                     std::chrono::duration<double> diff = qe - qs;
                     {
@@ -181,8 +183,8 @@ bool concurrent_bench(const std::string &data_path,
                     }
                     {
                         std::unique_lock<std::mutex> lock(result_mutex);
-                        search_results.emplace_back(
-                            cur_offset, query_idx, query_result_tags);
+                        search_results.emplace_back(cur_offset, query_idx,
+                                                    query_result_tags);
                         std::cout << "saved " << cur_offset << std::endl;
                     }
                 } catch (...) {

@@ -93,17 +93,18 @@ bool concurrent_bench(const std::string &data_path,
     get_bin_metadata(data_path, data_num, data_dim);
 
     size_t query_num, query_dim, query_aligned_dim;
-    T *query = nullptr;
-    load_aligned_bin(query_file, query, query_num, query_dim,
-                     query_aligned_dim);
+    T *raw_query = nullptr;
+    load_aligned_bin(query_file, raw_query, query_num, query_dim, query_aligned_dim);
+    auto query = std::unique_ptr<T[]>(raw_query);
 
-    T *data = nullptr;
-    load_aligned_bin(data_path, data, data_num, data_dim, aligned_dim);
+    T *raw_data = nullptr;
+    load_aligned_bin(data_path, raw_data, data_num, data_dim, aligned_dim);
+    auto data = std::unique_ptr<T[]>(raw_data);
 
     std::vector<uint32_t> tags(begin_num);
     std::iota(tags.begin(), tags.end(), static_cast<uint32_t>(0));
-    index->build(data, begin_num, tags);
-
+    index->build(data.get(), begin_num, tags);
+    
     size_t insert_total = data_num - begin_num;
     size_t search_total = insert_total * ((1 - write_ratio) / write_ratio);
     size_t search_batch_size = batch_size * ((1 - write_ratio) / write_ratio);
@@ -126,12 +127,14 @@ bool concurrent_bench(const std::string &data_path,
            end_search_offset < search_total) {
         end_insert_offset =
             std::min(start_insert_offset + batch_size, insert_total);
+        std::cout << "Inserting with insert_offset=" << begin_num + end_insert_offset << std::endl;
+
         for (size_t idx = start_insert_offset; idx < end_insert_offset; ++idx) {
             pool.enqueue_task([&, idx] {
                 try {
                     auto qs = std::chrono::high_resolution_clock::now();
                     int insert_result = index->insert_point(
-                        &data[(idx + begin_num) * aligned_dim],
+                        &data.get()[(idx + begin_num) * aligned_dim],
                         static_cast<TagT>(idx + begin_num));
                     if (insert_result != 0)
                         failed_insert_count->fetch_add(
@@ -157,14 +160,17 @@ bool concurrent_bench(const std::string &data_path,
 
         end_search_offset =
             std::min(start_search_offset + search_batch_size, search_total);
+        size_t cur_offset = begin_num + end_insert_offset;
+        std::cout << "Searching with search_offset=" << cur_offset << std::endl;
         for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
             if (++query_idx >= query_num) query_idx %= query_num;
-            pool.enqueue_task([&, query_idx] {
+            pool.enqueue_task([&, query_idx, cur_offset] {
                 try {
                     auto qs = std::chrono::high_resolution_clock::now();
-                    std::vector<TagT> query_result_tags(recall_at);
+                    std::vector<TagT> query_result_tags;
+                    query_result_tags.reserve(recall_at);
                     index->search_with_tags(
-                        query + query_idx * query_aligned_dim, recall_at, Ls,
+                        query.get() + query_idx * query_aligned_dim, recall_at, Ls,
                         query_result_tags);
                     auto qe = std::chrono::high_resolution_clock::now();
                     std::chrono::duration<double> diff = qe - qs;
@@ -176,8 +182,8 @@ bool concurrent_bench(const std::string &data_path,
                     {
                         std::unique_lock<std::mutex> lock(result_mutex);
                         search_results.emplace_back(
-                            end_insert_offset * batch_size, query_idx,
-                            query_result_tags);
+                            cur_offset, query_idx, query_result_tags);
+                        std::cout << "saved " << cur_offset << std::endl;
                     }
                 } catch (...) {
                     std::unique_lock<std::mutex> lock(last_except_mutex);
@@ -233,8 +239,7 @@ bool concurrent_bench(const std::string &data_path,
               << (search_latency_stats.empty() ? 0.0 : p99_search_latency)
               << " microseconds\n";
 
-    delete[] data;
-    delete[] query;
+    std::cout << "finish\n";
 
     return true;
 }

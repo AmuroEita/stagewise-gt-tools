@@ -47,11 +47,14 @@ void read_results(std::vector<SearchResult<uint32_t>> &res,
             continue;
         }
 
-        if (line == "batch") {
-            if (!first_batch) {
-                current_offset++;
+        if (line.find("batch") == 0) {
+            std::istringstream batch_stream(line);
+            std::string batch_word;
+            batch_stream >> batch_word; 
+            if (!(batch_stream >> current_offset)) {
+                in_file.close();
+                throw std::runtime_error("Invalid batch offset format: " + line);
             }
-            first_batch = false;
             continue;
         }
 
@@ -101,9 +104,9 @@ void write_results(std::vector<SearchResult<uint32_t>> &res,
     for (const auto &result : res) {
         if (result.insert_offset != current_offset) {
             current_offset = result.insert_offset;
-            out_file << "\nbatch\n";
+            out_file << "\nbatch " << current_offset << "\n";
         } else if (first_batch) {
-            out_file << "batch\n";
+            out_file << "batch " << current_offset << "\n";
             first_batch = false;
         }
 

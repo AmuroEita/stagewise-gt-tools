@@ -50,10 +50,11 @@ void read_results(std::vector<SearchResult<uint32_t>> &res,
         if (line.find("batch") == 0) {
             std::istringstream batch_stream(line);
             std::string batch_word;
-            batch_stream >> batch_word; 
+            batch_stream >> batch_word;
             if (!(batch_stream >> current_offset)) {
                 in_file.close();
-                throw std::runtime_error("Invalid batch offset format: " + line);
+                throw std::runtime_error("Invalid batch offset format: " +
+                                         line);
             }
             continue;
         }

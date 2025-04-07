@@ -125,59 +125,60 @@ void write_results(std::vector<SearchResult<uint32_t>> &res,
     out_file.close();
 }
 
-template<typename TagT = uint32_t>
-void load_gt(std::vector<SearchResult<TagT>>& gt, const std::string& gt_path) {
+template <typename TagT = uint32_t>
+void load_gt(std::vector<SearchResult<TagT>> &gt, const std::string &gt_path) {
     std::ifstream in(gt_path, std::ios::binary);
     if (!in.is_open()) {
         throw std::runtime_error("Failed to open file: " + gt_path);
     }
 
     int n, k, b;
-    in.read(reinterpret_cast<char*>(&n), sizeof(int)); 
-    in.read(reinterpret_cast<char*>(&k), sizeof(int)); 
-    in.read(reinterpret_cast<char*>(&b), sizeof(int)); 
+    in.read(reinterpret_cast<char *>(&n), sizeof(int));
+    in.read(reinterpret_cast<char *>(&k), sizeof(int));
+    in.read(reinterpret_cast<char *>(&b), sizeof(int));
 
     if (n <= 0 || k <= 0 || b <= 0) {
-        throw std::runtime_error("Invalid file header: n, k, or b is non-positive");
+        throw std::runtime_error(
+            "Invalid file header: n, k, or b is non-positive");
     }
 
     gt.clear();
-    gt.reserve(n * b); 
+    gt.reserve(n * b);
 
     for (int batch_idx = 0; batch_idx < b; ++batch_idx) {
         int current_base_size;
-        in.read(reinterpret_cast<char*>(&current_base_size), sizeof(int));
+        in.read(reinterpret_cast<char *>(&current_base_size), sizeof(int));
         if (!in.good()) {
-            throw std::runtime_error("Failed to read base size for batch " + 
-                                    std::to_string(batch_idx));
+            throw std::runtime_error("Failed to read base size for batch " +
+                                     std::to_string(batch_idx));
         }
 
         std::vector<int> indices(n * k);
-        in.read(reinterpret_cast<char*>(indices.data()), n * k * sizeof(int));
+        in.read(reinterpret_cast<char *>(indices.data()), n * k * sizeof(int));
         if (!in.good()) {
-            throw std::runtime_error("Failed to read indices for batch " + 
-                                    std::to_string(batch_idx));
+            throw std::runtime_error("Failed to read indices for batch " +
+                                     std::to_string(batch_idx));
         }
 
         in.seekg(n * k * sizeof(float), std::ios::cur);
         if (!in.good()) {
-            throw std::runtime_error("Failed to skip distances for batch " + 
-                                    std::to_string(batch_idx));
+            throw std::runtime_error("Failed to skip distances for batch " +
+                                     std::to_string(batch_idx));
         }
 
         for (int query_idx = 0; query_idx < n; ++query_idx) {
             std::vector<TagT> tags(k);
             for (int j = 0; j < k; ++j) {
                 size_t offset = query_idx * k + j;
-                tags[j] = indices[offset]; 
+                tags[j] = indices[offset];
             }
             gt.emplace_back(current_base_size, query_idx, tags);
         }
     }
 
     in.close();
-    std::cout << "Loaded " << gt.size() << " search results from " << gt_path 
-              << " (queries: " << n << ", k: " << k << ", batches: " << b << ")" 
+    std::cout << "Loaded " << gt.size() << " search results from " << gt_path
+              << " (queries: " << n << ", k: " << k << ", batches: " << b << ")"
               << std::endl;
 }
 

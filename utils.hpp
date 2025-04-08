@@ -15,12 +15,13 @@ struct SearchResult {
     size_t insert_offset;
     size_t query_idx;
     std::vector<TagT> tags;
-    std::vector<float> distances; 
+    std::vector<float> distances;
 
     SearchResult(size_t offset, size_t idx, const std::vector<TagT> &t)
         : insert_offset(offset), query_idx(idx), tags(t), distances() {}
 
-    SearchResult(size_t offset, size_t idx, const std::vector<TagT> &t, const std::vector<float> &d)
+    SearchResult(size_t offset, size_t idx, const std::vector<TagT> &t,
+                 const std::vector<float> &d)
         : insert_offset(offset), query_idx(idx), tags(t), distances(d) {}
 };
 
@@ -131,19 +132,20 @@ void write_results(std::vector<SearchResult<uint32_t>> &res,
 }
 
 template <typename TagT = uint32_t>
-void load_gt(std::vector<SearchResult<TagT>>& gt, const std::string& gt_path) {
+void load_gt(std::vector<SearchResult<TagT>> &gt, const std::string &gt_path) {
     std::ifstream in(gt_path, std::ios::binary);
     if (!in.is_open()) {
         throw std::runtime_error("Failed to open file: " + gt_path);
     }
 
     int n, k, b;
-    in.read(reinterpret_cast<char*>(&n), sizeof(int));
-    in.read(reinterpret_cast<char*>(&k), sizeof(int));
-    in.read(reinterpret_cast<char*>(&b), sizeof(int));
+    in.read(reinterpret_cast<char *>(&n), sizeof(int));
+    in.read(reinterpret_cast<char *>(&k), sizeof(int));
+    in.read(reinterpret_cast<char *>(&b), sizeof(int));
 
     if (n <= 0 || k <= 0 || b <= 0) {
-        throw std::runtime_error("Invalid file header: n, k, or b is non-positive");
+        throw std::runtime_error(
+            "Invalid file header: n, k, or b is non-positive");
     }
 
     gt.clear();
@@ -151,21 +153,25 @@ void load_gt(std::vector<SearchResult<TagT>>& gt, const std::string& gt_path) {
 
     for (int batch_idx = 0; batch_idx < b; ++batch_idx) {
         int current_base_size;
-        in.read(reinterpret_cast<char*>(&current_base_size), sizeof(int));
+        in.read(reinterpret_cast<char *>(&current_base_size), sizeof(int));
         if (!in.good()) {
-            throw std::runtime_error("Failed to read base size for batch " + std::to_string(batch_idx));
+            throw std::runtime_error("Failed to read base size for batch " +
+                                     std::to_string(batch_idx));
         }
 
         std::vector<int> indices(n * k);
-        in.read(reinterpret_cast<char*>(indices.data()), n * k * sizeof(int));
+        in.read(reinterpret_cast<char *>(indices.data()), n * k * sizeof(int));
         if (!in.good()) {
-            throw std::runtime_error("Failed to read indices for batch " + std::to_string(batch_idx));
+            throw std::runtime_error("Failed to read indices for batch " +
+                                     std::to_string(batch_idx));
         }
 
         std::vector<float> distances(n * k);
-        in.read(reinterpret_cast<char*>(distances.data()), n * k * sizeof(float));
+        in.read(reinterpret_cast<char *>(distances.data()),
+                n * k * sizeof(float));
         if (!in.good()) {
-            throw std::runtime_error("Failed to read distances for batch " + std::to_string(batch_idx));
+            throw std::runtime_error("Failed to read distances for batch " +
+                                     std::to_string(batch_idx));
         }
 
         for (int query_idx = 0; query_idx < n; ++query_idx) {
@@ -176,7 +182,8 @@ void load_gt(std::vector<SearchResult<TagT>>& gt, const std::string& gt_path) {
                 tags[j] = indices[offset];
                 query_distances.push_back(distances[offset]);
             }
-            gt.emplace_back(current_base_size, query_idx, tags, query_distances);
+            gt.emplace_back(current_base_size, query_idx, tags,
+                            query_distances);
         }
     }
 

@@ -152,7 +152,8 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
     }
 
     std::cout << "Computed recall for " << valid_entries
-              << " queries, average stage-wise recall: " << average_recall << std::endl;
+              << " queries, average stage-wise recall: " << average_recall
+              << std::endl;
     return average_recall;
 }
 

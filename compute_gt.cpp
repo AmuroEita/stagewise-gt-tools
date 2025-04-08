@@ -3,25 +3,25 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <queue>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
-#include <queue>
 
 using PointPair = std::pair<int, float>;
 
 float euclidean_distance_simd(const std::vector<float> &a,
-    const std::vector<float> &b) {
+                              const std::vector<float> &b) {
     if (a.size() != b.size())
-    throw std::runtime_error("Vector dimensions mismatch");
+        throw std::runtime_error("Vector dimensions mismatch");
 
     size_t n = a.size();
     float sum = 0.0f;
     size_t i = 0;
 
     if (n >= 8) {
-        __m256 sum_vec = _mm256_setzero_ps();  
+        __m256 sum_vec = _mm256_setzero_ps();
         for (; i <= n - 8; i += 8) {
             __m256 va = _mm256_loadu_ps(&a[i]);
             __m256 vb = _mm256_loadu_ps(&b[i]);
@@ -40,21 +40,22 @@ float euclidean_distance_simd(const std::vector<float> &a,
         sum += diff * diff;
     }
 
-    return sum;  
+    return sum;
 }
 
-std::vector<PointPair> exact_knn(
-    const std::vector<float> &query,
-    const std::vector<std::vector<float>> &base, size_t b_size, int k) {
+std::vector<PointPair> exact_knn(const std::vector<float> &query,
+                                 const std::vector<std::vector<float>> &base,
+                                 size_t b_size, int k) {
     using HeapPair = std::pair<float, int>;
-    std::priority_queue<HeapPair, std::vector<HeapPair>, std::less<HeapPair>> max_heap;
+    std::priority_queue<HeapPair, std::vector<HeapPair>, std::less<HeapPair>>
+        max_heap;
 
     for (size_t j = 0; j < b_size && j < base.size(); ++j) {
         float dist = euclidean_distance_simd(query, base[j]);
         if (max_heap.size() < static_cast<size_t>(k)) {
             max_heap.emplace(dist, static_cast<int>(j));
         } else if (dist < max_heap.top().first) {
-            max_heap.pop(); 
+            max_heap.pop();
             max_heap.emplace(dist, static_cast<int>(j));
         }
     }
@@ -175,8 +176,8 @@ void save_to_bin(
 
 void compute_and_save_full_groundtruth(
     const std::vector<std::vector<float>> &base,
-    const std::vector<std::vector<float>> &queries,
-    const std::string &filename, int k) {
+    const std::vector<std::vector<float>> &queries, const std::string &filename,
+    int k) {
     if (!base.empty() && !queries.empty() &&
         base[0].size() != queries[0].size()) {
         throw std::runtime_error("Base and query vector dimensions mismatch");
@@ -185,16 +186,16 @@ void compute_and_save_full_groundtruth(
     std::vector<std::vector<PointPair>> results =
         compute_batch_groundtruth(base, queries, base.size(), k);
 
-    size_t npts = queries.size();  
-    size_t ndims = k;             
-    std::vector<int32_t> data(npts * ndims);       
-    std::vector<float> distances(npts * ndims);    
+    size_t npts = queries.size();
+    size_t ndims = k;
+    std::vector<int32_t> data(npts * ndims);
+    std::vector<float> distances(npts * ndims);
 
     for (size_t i = 0; i < npts; ++i) {
         for (size_t j = 0; j < ndims; ++j) {
             size_t idx = i * ndims + j;
-            data[idx] = results[i][j].first;      
-            distances[idx] = results[i][j].second; 
+            data[idx] = results[i][j].first;
+            distances[idx] = results[i][j].second;
         }
     }
 
@@ -207,17 +208,21 @@ void compute_and_save_full_groundtruth(
     int ndims_i32 = static_cast<int>(ndims);
     writer.write(reinterpret_cast<char *>(&npts_i32), sizeof(int));
     writer.write(reinterpret_cast<char *>(&ndims_i32), sizeof(int));
-    std::cout << "Saving full groundtruth in one file (npts, dim, npts*dim id-matrix, "
+    std::cout << "Saving full groundtruth in one file (npts, dim, npts*dim "
+                 "id-matrix, "
                  "npts*dim dist-matrix) with npts = "
               << npts << ", dim = " << ndims << ", size = "
               << 2 * npts * ndims * sizeof(int32_t) + 2 * sizeof(int) << "B"
               << std::endl;
 
-    writer.write(reinterpret_cast<char *>(data.data()), npts * ndims * sizeof(int32_t));
-    writer.write(reinterpret_cast<char *>(distances.data()), npts * ndims * sizeof(float));
+    writer.write(reinterpret_cast<char *>(data.data()),
+                 npts * ndims * sizeof(int32_t));
+    writer.write(reinterpret_cast<char *>(distances.data()),
+                 npts * ndims * sizeof(float));
     writer.close();
 
-    std::cout << "Finished writing full groundtruth to " << filename << std::endl;
+    std::cout << "Finished writing full groundtruth to " << filename
+              << std::endl;
 }
 
 struct Args {
@@ -253,16 +258,21 @@ Args parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     Args args = parse_args(argc, argv);
 
-    if (args.base_path.empty() || args.query_path.empty() || args.k <= 0 || args.data_type.empty() ||
+    if (args.base_path.empty() || args.query_path.empty() || args.k <= 0 ||
+        args.data_type.empty() ||
         (args.gt_path.empty() && args.batch_gt_path.empty())) {
-        std::cerr << "Error: Missing required arguments (base_path, query_path, data_type, k, and at least one of gt_path or batch_gt_path)" << std::endl;
+        std::cerr
+            << "Error: Missing required arguments (base_path, query_path, "
+               "data_type, k, and at least one of gt_path or batch_gt_path)"
+            << std::endl;
         return 1;
     }
 
     std::vector<std::vector<float>> base = read_fvecs(args.base_path);
     std::vector<std::vector<float>> queries = read_fvecs(args.query_path);
 
-    std::cout << "Computing groundtruth for " << args.k << " nearest neighbors" << std::endl;
+    std::cout << "Computing groundtruth for " << args.k << " nearest neighbors"
+              << std::endl;
 
     if (!args.batch_gt_path.empty()) {
         const int increment = 100;
@@ -271,16 +281,20 @@ int main(int argc, char *argv[]) {
 
         std::vector<std::vector<std::vector<PointPair>>> all_batches;
         all_batches.reserve(num_batches);
-        for (size_t b_size = increment; b_size <= total_b; b_size += increment) {
-            std::cout << "Processing base size " << b_size << " for batch groundtruth" << std::endl;
-            auto batch_gt = compute_batch_groundtruth(base, queries, b_size, args.k);
+        for (size_t b_size = increment; b_size <= total_b;
+             b_size += increment) {
+            std::cout << "Processing base size " << b_size
+                      << " for batch groundtruth" << std::endl;
+            auto batch_gt =
+                compute_batch_groundtruth(base, queries, b_size, args.k);
             all_batches.push_back(batch_gt);
         }
         save_to_bin(all_batches, args.batch_gt_path, args.k);
     }
 
     if (!args.gt_path.empty()) {
-        std::cout << "Processing full base size " << base.size() << " for full groundtruth" << std::endl;
+        std::cout << "Processing full base size " << base.size()
+                  << " for full groundtruth" << std::endl;
         compute_and_save_full_groundtruth(base, queries, args.gt_path, args.k);
     }
 

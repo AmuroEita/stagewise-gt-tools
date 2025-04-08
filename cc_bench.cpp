@@ -70,8 +70,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (data_path.empty() || query_path.empty() || batch_res_path.empty() || gt_path.empty()) {
-        std::cerr << "Need --data_path, --query_path, --batch_res_path and --gt_path\n";
+    if (data_path.empty() || query_path.empty() || batch_res_path.empty() ||
+        gt_path.empty()) {
+        std::cerr << "Need --data_path, --query_path, --batch_res_path and "
+                     "--gt_path\n";
         return 1;
     }
 
@@ -91,11 +93,13 @@ int main(int argc, char *argv[]) {
             [&]() {
                 concurrent_bench<float, TagT, LabelT>(
                     data_path, query_path, begin_num, write_ratio, batch_size,
-                    recall_at, Ls, num_threads, std::move(index), search_results);
+                    recall_at, Ls, num_threads, std::move(index),
+                    search_results);
             },
             true);
-        
-        overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls, std::move(index), gt_path);
+
+        overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls,
+                                            std::move(index), gt_path);
     } else if (data_type == "int8_t") {
     } else if (data_type == "uint8_t") {
     } else {

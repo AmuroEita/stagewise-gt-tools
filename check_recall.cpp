@@ -112,10 +112,10 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
             float progress =
                 static_cast<float>(completed_chunks) / total_chunks * 100.0f;
             std::cout << "Progress: " << completed_chunks << "/" << total_chunks
-                    << " chunks completed (" << std::fixed << std::setprecision(2)
-                    << progress << "%)" << std::endl;
+                      << " chunks completed (" << std::fixed
+                      << std::setprecision(2) << progress << "%)" << std::endl;
         } catch (const std::exception& e) {
-            std::cerr << "Thread exception: " << e.what() << std::endl; 
+            std::cerr << "Thread exception: " << e.what() << std::endl;
         }
     }
 

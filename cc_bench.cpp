@@ -94,6 +94,7 @@ int main(int argc, char *argv[]) {
                     recall_at, Ls, num_threads, std::move(index), search_results);
             },
             true);
+        write_results(search_results, batch_res_path);
         
         overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls, std::move(index), gt_path);
     } else if (data_type == "int8_t") {

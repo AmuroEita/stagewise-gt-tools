@@ -148,19 +148,26 @@ void save_to_bin(
         int current_base_size = static_cast<int>((batch_idx + 1) * 100);
         out.write(reinterpret_cast<const char *>(&current_base_size),
                   sizeof(int));
+        if (!out.good()) throw std::runtime_error("write base_size failed at batch " + std::to_string(batch_idx));
 
         const auto &batch_gt = all_batches[batch_idx];
         for (const auto &result : batch_gt) {
             for (const auto &[id, dist] : result) {
                 out.write(reinterpret_cast<const char *>(&id), sizeof(int));
+                if (!out.good()) throw std::runtime_error("write query index at batch " + std::to_string(batch_idx));
             }
         }
+
+        size_t dist_count = 0;
         for (const auto &result : batch_gt) {
             for (const auto &[id, dist] : result) {
                 out.write(reinterpret_cast<const char *>(&dist), sizeof(float));
+                if (!out.good()) throw std::runtime_error("write distance at batch " + std::to_string(batch_idx));
+                dist_count++;
             }
         }
     }
+
     out.close();
     std::cout << "Saved to " << filename << " (queries: " << n << ", k: " << k
               << ", batches: " << b << ")" << std::endl;
@@ -232,7 +239,7 @@ Args parse_args(int argc, char *argv[]) {
         else if (arg == "--query_path" && i + 1 < argc)
             args.query_path = argv[++i];
         else if (arg == "--batch_gt_path" && i + 1 < argc)
-            args.gt_path = argv[++i];
+            args.batch_gt_path = argv[++i];
         else if (arg == "--gt_path" && i + 1 < argc)
             args.gt_path = argv[++i];
         else if (arg == "--data_type" && i + 1 < argc)

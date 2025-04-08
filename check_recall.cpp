@@ -96,23 +96,27 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
     size_t completed_chunks = 0;
 
     for (auto& f : futures) {
-        ThreadResult result = f.get();
-        total_recall += result.total_recall;
-        valid_entries += result.valid_entries;
+        try {
+            ThreadResult result = f.get();
+            total_recall += result.total_recall;
+            valid_entries += result.valid_entries;
 
-        for (const auto& [offset, recall_sum] : result.batch_recall_sum) {
-            batch_recall_sum[offset] += recall_sum;
-        }
-        for (const auto& [offset, count] : result.batch_entry_count) {
-            batch_entry_count[offset] += count;
-        }
+            for (const auto& [offset, recall_sum] : result.batch_recall_sum) {
+                batch_recall_sum[offset] += recall_sum;
+            }
+            for (const auto& [offset, count] : result.batch_entry_count) {
+                batch_entry_count[offset] += count;
+            }
 
-        completed_chunks++;
-        float progress =
-            static_cast<float>(completed_chunks) / total_chunks * 100.0f;
-        std::cout << "Progress: " << completed_chunks << "/" << total_chunks
-                  << " chunks completed (" << std::fixed << std::setprecision(2)
-                  << progress << "%)" << std::endl;
+            completed_chunks++;
+            float progress =
+                static_cast<float>(completed_chunks) / total_chunks * 100.0f;
+            std::cout << "Progress: " << completed_chunks << "/" << total_chunks
+                    << " chunks completed (" << std::fixed << std::setprecision(2)
+                    << progress << "%)" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Thread exception: " << e.what() << std::endl; 
+        }
     }
 
     if (valid_entries == 0) {

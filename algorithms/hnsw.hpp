@@ -5,14 +5,14 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {
    public:
     HNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction)
-        : space(dim) {
+        : dim(dim), space(dim) {
         index = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
                                                 ef_construction);
     }
 
     void build(T *data, size_t num_points, std::vector<TagT> &tags) {
         for (size_t i = 0; i < num_points; i++) {
-            index->addPoint(data, tags[i]);
+            index->addPoint(data + i * dim, tags[i]);
         }
     }
 
@@ -30,6 +30,7 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         }
     }
 
+    size_t dim;
     hnswlib::L2Space space;
     hnswlib::HierarchicalNSW<T> *index;
 };

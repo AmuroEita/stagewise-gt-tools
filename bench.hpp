@@ -83,7 +83,6 @@ bool concurrent_bench(const std::string &data_path,
                       const uint32_t recall_at, const uint32_t Ls,
                       const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
-                      const std::string &res_path,
                       std::vector<SearchResult<TagT>> &search_results) {
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
@@ -91,16 +90,15 @@ bool concurrent_bench(const std::string &data_path,
 
     size_t data_num, data_dim, aligned_dim;
     get_bin_metadata(data_path, data_num, data_dim);
+    T *raw_data = nullptr;
+    load_aligned_bin(data_path, raw_data, data_num, data_dim, aligned_dim);
+    auto data = std::unique_ptr<T[]>(raw_data);
 
     size_t query_num, query_dim, query_aligned_dim;
     T *raw_query = nullptr;
     load_aligned_bin(query_file, raw_query, query_num, query_dim,
                      query_aligned_dim);
     auto query = std::unique_ptr<T[]>(raw_query);
-
-    T *raw_data = nullptr;
-    load_aligned_bin(data_path, raw_data, data_num, data_dim, aligned_dim);
-    auto data = std::unique_ptr<T[]>(raw_data);
 
     std::vector<uint32_t> tags(begin_num);
     std::iota(tags.begin(), tags.end(), static_cast<uint32_t>(0));
@@ -185,7 +183,6 @@ bool concurrent_bench(const std::string &data_path,
                         std::unique_lock<std::mutex> lock(result_mutex);
                         search_results.emplace_back(cur_offset, query_idx,
                                                     query_result_tags);
-                        std::cout << "saved " << cur_offset << std::endl;
                     }
                 } catch (...) {
                     std::unique_lock<std::mutex> lock(last_except_mutex);
@@ -241,7 +238,68 @@ bool concurrent_bench(const std::string &data_path,
               << (search_latency_stats.empty() ? 0.0 : p99_search_latency)
               << " microseconds\n";
 
-    std::cout << "finish\n";
+    return true;
+}
+
+template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
+bool overall_recall(const std::string &query_file, 
+                    const uint32_t recall_at, const uint32_t Ls,
+                    std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
+                    const std::string &gt_path) {
+    size_t query_num, query_dim, query_aligned_dim;
+    T *raw_query = nullptr;
+    load_aligned_bin(query_file, raw_query, query_num, query_dim, query_aligned_dim);
+    auto query = std::unique_ptr<T[]>(raw_query);
+
+    std::ifstream gt_reader(gt_path, std::ios::binary);
+    if (!gt_reader.is_open()) {
+        std::cerr << "Failed to open ground truth file: " << gt_path << std::endl;
+        return false;
+    }
+
+    int gt_npts, gt_k;
+    gt_reader.read(reinterpret_cast<char*>(&gt_npts), sizeof(int));
+    gt_reader.read(reinterpret_cast<char*>(&gt_k), sizeof(int));
+    if (gt_npts != static_cast<int>(query_num) || gt_k < static_cast<int>(recall_at)) {
+        std::cerr << "Ground truth mismatch: npts=" << gt_npts << " vs " << query_num
+                  << ", k=" << gt_k << " vs recall_at=" << recall_at << std::endl;
+        gt_reader.close();
+        return false;
+    }
+
+    std::vector<TagT> gt_ids(gt_npts * gt_k);
+    std::vector<float> gt_distances(gt_npts * gt_k);
+    gt_reader.read(reinterpret_cast<char*>(gt_ids.data()), gt_npts * gt_k * sizeof(TagT));
+    gt_reader.read(reinterpret_cast<char*>(gt_distances.data()), gt_npts * gt_k * sizeof(float));
+    gt_reader.close();
+
+    uint64_t total_correct = 0;
+    for (uint32_t i = 0; i < query_num; i++) {
+        std::vector<TagT> query_result_tags;
+        query_result_tags.reserve(recall_at);
+        index->search_with_tags(query.get() + i * query_aligned_dim, recall_at, Ls, query_result_tags);
+
+        std::unordered_set<TagT> gt_set;
+        uint32_t tie_breaker = recall_at - 1; 
+        while (tie_breaker < gt_k && 
+               gt_distances[i * gt_k + tie_breaker] == gt_distances[i * gt_k + recall_at - 1]) {
+            tie_breaker++; 
+        }
+        for (uint32_t j = 0; j < tie_breaker; j++) {
+            gt_set.insert(gt_ids[i * gt_k + j]); 
+        }
+
+        uint32_t correct = 0;
+        for (const auto& tag : query_result_tags) {
+            if (gt_set.count(tag)) {
+                correct++;
+            }
+        }
+        total_correct += correct;
+    }
+
+    float recall = static_cast<float>(total_correct) / (query_num * recall_at) * 100;
+    std::cout << "Recall@" << recall_at << " = " << recall << "%" << std::endl;
 
     return true;
 }

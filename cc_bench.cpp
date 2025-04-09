@@ -6,6 +6,7 @@
 
 #include "algorithms/hnsw.hpp"
 #include "bench.hpp"
+#include "utils.hpp"
 
 int main(int argc, char *argv[]) {
     int retval = PAPI_library_init(PAPI_VER_CURRENT);
@@ -15,13 +16,14 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    std::string data_type, data_path, query_path, batch_res_path, gt_path;
+    std::string data_type, data_path, query_path, batch_res_path, gt_path, index_name, dataset_name, stat_path;
     size_t begin_num = 5000, batch_size = 100;
     float write_ratio = 0.5;
     size_t recall_at = 10, R = 16, Ls = 50,
            num_threads = std::thread::hardware_concurrency();
 
-    struct option long_options[] = {{"data_type", required_argument, 0, 0},
+    struct option long_options[] = {{"dataset_name", required_argument, 0, 0},
+                                    {"data_type", required_argument, 0, 0},
                                     {"data_path", required_argument, 0, 0},
                                     {"query_path", required_argument, 0, 0},
                                     {"batch_res_path", required_argument, 0, 0},
@@ -35,6 +37,7 @@ int main(int argc, char *argv[]) {
                                     {"dim", required_argument, 0, 0},
                                     {"num_threads", required_argument, 0, 0},
                                     {"gt_path", required_argument, 0, 0},
+                                    {"stat_path", required_argument, 0, 0},
                                     {0, 0, 0, 0}};
 
     int option_index = 0;
@@ -43,7 +46,9 @@ int main(int argc, char *argv[]) {
            -1) {
         if (c == 0) {
             std::string opt_name = long_options[option_index].name;
-            if (opt_name == "data_type")
+            if (opt_name == "dataset_name")
+                dataset_name = optarg;
+            else if (opt_name == "data_type")
                 data_type = optarg;
             else if (opt_name == "data_path")
                 data_path = optarg;
@@ -67,6 +72,8 @@ int main(int argc, char *argv[]) {
                 num_threads = std::stoul(optarg);
             else if (opt_name == "gt_path")
                 gt_path = optarg;
+            else if (opt_name == "stat_path")
+                stat_path = optarg;
         }
     }
 
@@ -85,19 +92,22 @@ int main(int argc, char *argv[]) {
     get_bin_metadata(data_path, data_num, data_dim);
     search_results.reserve(data_num * (1 / write_ratio - 1));
 
+    Stat stat("HNSW", dataset_name, R, Ls, write_ratio, num_threads, batch_size, batch_res_path);
+
     if (data_type == "float") {
         using IndexType = HNSW<float, TagT, LabelT>;
         std::unique_ptr<IndexBase<float, TagT, LabelT>> index(
             new IndexType(data_dim, data_num, R, Ls));
+    
         measure_performance(
             [&]() {
                 concurrent_bench<float, TagT, LabelT>(
                     data_path, query_path, begin_num, write_ratio, batch_size,
                     recall_at, Ls, num_threads, std::move(index),
-                    search_results);
+                    search_results, stat);
             },
             true);
-        write_results(search_results, batch_res_path);
+        
 
         overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls,
                                             std::move(index), gt_path);
@@ -108,7 +118,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    write_results(search_results, batch_res_path);
+    save_stat(stat, stat_path);
+    write_results(search_results, stat.stagewise_result_path);
 
     return 0;
 }

@@ -83,7 +83,7 @@ bool concurrent_bench(const std::string &data_path,
                       const uint32_t recall_at, const uint32_t Ls,
                       const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
-                      std::vector<SearchResult<TagT>> &search_results) {
+                      std::vector<SearchResult<TagT>> &search_results, Stat &stat) {
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
               << 1 - write_ratio << std::endl;
@@ -205,6 +205,10 @@ bool concurrent_bench(const std::string &data_path,
         std::accumulate(insert_latency_stats.begin(),
                         insert_latency_stats.end(), 0.0) /
         static_cast<float>(insert_total);
+    double p95_insert_latency =
+        insert_latency_stats.empty()
+            ? 0.0
+            : (float)insert_latency_stats[(uint64_t)(0.95 * insert_total)];
     double p99_insert_latency =
         insert_latency_stats.empty()
             ? 0.0
@@ -215,28 +219,32 @@ bool concurrent_bench(const std::string &data_path,
         std::accumulate(search_latency_stats.begin(),
                         search_latency_stats.end(), 0.0) /
         static_cast<float>(search_total);
+    double p95_search_latency =
+        search_latency_stats.empty()
+            ? 0.0
+            : (float)search_latency_stats[(uint64_t)(0.95 * search_total)];
     double p99_search_latency =
         search_latency_stats.empty()
             ? 0.0
             : (float)search_latency_stats[(uint64_t)(0.999 * search_total)];
 
+    stat.num_points = data_num;
+
+    stat.insert_qps = insert_qps;
+    stat.mean_insert_latency = (insert_latency_stats.empty() ? 0.0 : mean_insert_latency);
+    stat.p95_insert_latency = (insert_latency_stats.empty() ? 0.0 : p95_insert_latency);
+    stat.p99_insert_latency = (insert_latency_stats.empty() ? 0.0 : p99_insert_latency);
+
+    stat.search_qps = search_qps;
+    stat.mean_search_latency = (search_latency_stats.empty() ? 0.0 : mean_search_latency);
+    stat.p95_search_latency = (search_latency_stats.empty() ? 0.0 : p95_search_latency);
+    stat.p99_search_latency = (search_latency_stats.empty() ? 0.0 : p99_search_latency);
+
     std::cout << "Total time: " << elapsed_sec << " seconds\n"
               << "Insertion Statistics:\n"
               << "  Overall throughput: " << insert_qps << " points/second\n"
-              << "  Mean latency: "
-              << (insert_latency_stats.empty() ? 0.0 : mean_insert_latency)
-              << " microseconds\n"
-              << "  P99 latency: "
-              << (insert_latency_stats.empty() ? 0.0 : p99_insert_latency)
-              << " microseconds\n"
               << "Search Statistics:\n"
-              << "  Overall throughput: " << search_qps << " points/second\n"
-              << "  Mean latency: "
-              << (search_latency_stats.empty() ? 0.0 : mean_search_latency)
-              << " microseconds\n"
-              << "  P99 latency: "
-              << (search_latency_stats.empty() ? 0.0 : p99_search_latency)
-              << " microseconds\n";
+              << "  Overall throughput: " << search_qps << " points/second\n";
 
     return true;
 }

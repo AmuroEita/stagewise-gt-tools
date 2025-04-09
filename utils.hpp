@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <iomanip>
 
 template <typename TagT>
 struct SearchResult {
@@ -33,6 +34,59 @@ class IndexBase {
     virtual int insert_point(T *point, const TagT &tag) = 0;
     virtual void search_with_tags(const T *query, size_t k, size_t Ls,
                                   std::vector<TagT> &res_tags) = 0;
+};
+
+std::string to_string_with_precision(float value, int precision = 2) {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(precision) << value;
+    std::string str = ss.str();
+    
+    if (str.empty()) {
+        return std::to_string(value);
+    }
+
+    size_t pos = str.find_last_not_of('0');
+    if (pos != std::string::npos) {
+        str.erase(pos + 1, std::string::npos);
+    }
+
+    if (!str.empty() && str.back() == '.') {
+        str.pop_back();
+    }
+    return str;
+}
+
+struct Stat {
+    std::string index_name;
+    uint32_t num_points;
+    uint32_t R;
+    uint32_t Ls;
+    float alpha = 1.2;
+    uint32_t num_threads;
+    std::string dataset_name;
+    uint32_t batch_size;
+
+    float write_ratio;
+    double insert_qps;
+    double mean_insert_latency;
+    double p95_insert_latency;
+    double p99_insert_latency;
+
+    double search_qps;
+    double mean_search_latency;
+    double p95_search_latency;
+    double p99_search_latency;
+
+    float overall_recall_at_10;
+    std::string stagewise_result_path;
+
+    Stat(std::string idx_name, std::string ds_name, uint32_t r, uint32_t ls,
+        float wr, uint32_t threads, uint32_t batch_size, std::string res_path)
+      : index_name(idx_name), dataset_name(ds_name), R(r), Ls(ls), 
+        num_threads(threads), write_ratio(), alpha(1.2f), batch_size(100),
+        stagewise_result_path(res_path + "/" + index_name + "_" 
+            + dataset_name + "_R" + std::to_string(r) + "_Ls" + std::to_string(ls) 
+            + "_w" + to_string_with_precision(wr) + "_t" + std::to_string(threads) + ".res") {}
 };
 
 void read_results(std::vector<SearchResult<uint32_t>> &res,
@@ -99,7 +153,7 @@ void write_results(std::vector<SearchResult<uint32_t>> &res,
         [](const SearchResult<uint32_t> &a, const SearchResult<uint32_t> &b) {
             return a.insert_offset < b.insert_offset;
         });
-
+    
     std::ofstream out_file(res_path);
     if (!out_file.is_open()) {
         throw std::runtime_error("Unable to open file: " + res_path);
@@ -276,5 +330,49 @@ void get_bin_metadata(const std::string &filename, size_t &num_points,
               << " points and " << dimensions << " dimensions at offset "
               << offset << std::endl;
 
+    file.close();
+}
+
+void save_stat(Stat &stat, std::string stat_path) {
+    std::ifstream check_file(stat_path);
+    bool file_exists = check_file.good();
+    check_file.close();
+    std::cout << "Stat: " << stat_path << std::endl;
+
+    std::ofstream file(stat_path, std::ios::app); 
+    if (!file.is_open()) {
+        file.open(stat_path, std::ios::out); 
+        if (!file.is_open()) {
+            return;
+        }
+    }
+
+    if (!file_exists) {
+        file << "index_name,num_points,R,Ls,alpha,num_threads,dataset_name,batch_size,"
+             << "write_ratio,insert_qps,insert_mean_latency,insert_p95_latency,"
+             << "insert_p99_latency,search_qps,search_mean_latency,search_p95_latency,"
+             << "search_p99_latency,overall_recall_at_10\n";
+    }
+
+    std::ostringstream ss;
+    ss << stat.index_name << ","
+       << stat.num_points << ","
+       << stat.R << ","
+       << stat.Ls << ","
+       << stat.alpha << ","
+       << stat.num_threads << ","
+       << stat.dataset_name << ","
+       << stat.batch_size << ","
+       << stat.write_ratio << ","
+       << stat.insert_qps << ","
+       << stat.mean_insert_latency << ","
+       << stat.p95_insert_latency << ","
+       << stat.p99_insert_latency << ","
+       << stat.search_qps << ","
+       << stat.mean_search_latency << ","
+       << stat.p95_search_latency << ","
+       << stat.p99_search_latency << ","
+       << stat.overall_recall_at_10;
+    file << ss.str() << "\n";
     file.close();
 }

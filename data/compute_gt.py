@@ -16,7 +16,7 @@ for a, b, c, d, e in paths:
     os.system(cmd)
 
 for a, b, c, d, e in paths:
-    cmd = f"../build/compute_gt --base_path {a} --query_path {c} --batch_gt_path {d} --gt_path {e}--data_type float --k 20"
+    cmd = f"../build/compute_gt --base_path {a} --query_path {c} --batch_gt_path {d} --gt_path {e} --data_type float --k 20"
     print(f"Executing: {cmd}")
     import os
     os.system(cmd)

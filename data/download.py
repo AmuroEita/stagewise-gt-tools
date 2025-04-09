@@ -1,6 +1,6 @@
 import os
 import tarfile
-import wget
+import subprocess
 
 urls = [
     "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/gist.tar.gz",
@@ -23,17 +23,20 @@ for url in urls:
         filename = os.path.join(download_dir, url.split('/')[-1])
         
         print(f"Downloading {url}...")
-        wget.download(url, out=filename)
-        print(f"\nDownloaded {filename}")
-        
+        if url.startswith("ftp://"):
+            subprocess.run(["wget", url, "-O", filename], check=True)
+        else:
+            subprocess.run(["wget", "--no-check-certificate", url, "-O", filename], check=True)
+        print(f"Downloaded {filename}")
+
         print(f"Extracting {filename}...")
         with tarfile.open(filename, "r:gz") as tar:
             tar.extractall(path=download_dir)
         print(f"Extracted {filename}")
-        
+
         os.remove(filename)
         print(f"Removed {filename}")
-        
+
     except Exception as e:
         print(f"Error processing {url}: {str(e)}")
 

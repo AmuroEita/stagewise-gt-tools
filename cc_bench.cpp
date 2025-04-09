@@ -16,7 +16,8 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    std::string data_type, data_path, query_path, batch_res_path, gt_path, index_name, dataset_name, stat_path;
+    std::string data_type, data_path, query_path, batch_res_path, gt_path,
+        index_name, dataset_name, stat_path;
     size_t begin_num = 5000, batch_size = 100;
     float write_ratio = 0.5;
     size_t recall_at = 10, R = 16, Ls = 50,
@@ -92,13 +93,14 @@ int main(int argc, char *argv[]) {
     get_bin_metadata(data_path, data_num, data_dim);
     search_results.reserve(data_num * (1 / write_ratio - 1));
 
-    Stat stat("HNSW", dataset_name, R, Ls, write_ratio, num_threads, batch_size, batch_res_path);
+    Stat stat("HNSW", dataset_name, R, Ls, write_ratio, num_threads, batch_size,
+              batch_res_path);
 
     if (data_type == "float") {
         using IndexType = HNSW<float, TagT, LabelT>;
         std::unique_ptr<IndexBase<float, TagT, LabelT>> index(
             new IndexType(data_dim, data_num, R, Ls));
-    
+
         measure_performance(
             [&]() {
                 concurrent_bench<float, TagT, LabelT>(
@@ -107,7 +109,6 @@ int main(int argc, char *argv[]) {
                     search_results, stat);
             },
             true);
-        
 
         overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls,
                                             std::move(index), gt_path);

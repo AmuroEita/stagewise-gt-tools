@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <iomanip>
+#include <set>
 
 template <typename TagT>
 struct SearchResult {
@@ -24,16 +25,6 @@ struct SearchResult {
     SearchResult(size_t offset, size_t idx, const std::vector<TagT> &t,
                  const std::vector<float> &d)
         : insert_offset(offset), query_idx(idx), tags(t), distances(d) {}
-};
-
-template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
-class IndexBase {
-   public:
-    virtual ~IndexBase() = default;
-    virtual void build(T *data, size_t num_points, std::vector<TagT> &tags) = 0;
-    virtual int insert_point(T *point, const TagT &tag) = 0;
-    virtual void search_with_tags(const T *query, size_t k, size_t Ls,
-                                  std::vector<TagT> &res_tags) = 0;
 };
 
 std::string to_string_with_precision(float value, int precision = 2) {
@@ -375,4 +366,37 @@ void save_stat(Stat &stat, std::string stat_path) {
        << stat.overall_recall_at_10;
     file << ss.str() << "\n";
     file.close();
+}
+
+double calculate_recall(uint32_t num_queries, uint32_t *gold_std,
+    float *gs_dist, uint32_t dim_gs, uint32_t *our_results,
+    uint32_t dim_or, uint32_t recall_at) {
+    double total_recall = 0;
+    std::set<uint32_t> gt, res;
+
+    for (size_t i = 0; i < num_queries; i++) {
+        gt.clear();
+        res.clear();
+        uint32_t *gt_vec = gold_std + dim_gs * i;
+        uint32_t *res_vec = our_results + dim_or * i;
+        size_t tie_breaker = recall_at;
+        if (gs_dist != nullptr) {
+            tie_breaker = recall_at - 1;
+            float *gt_dist_vec = gs_dist + dim_gs * i;
+            while (tie_breaker < dim_gs &&
+                 gt_dist_vec[tie_breaker] == gt_dist_vec[recall_at - 1])
+                tie_breaker++;
+        }
+
+        gt.insert(gt_vec, gt_vec + tie_breaker);
+        res.insert(res_vec, res_vec + recall_at);
+        uint32_t cur_recall = 0;
+        for (auto &v : gt) {
+            if (res.find(v) != res.end()) {
+            cur_recall++;
+            }
+        }
+        total_recall += cur_recall;
+    }
+    return total_recall / num_queries * (100.0 / recall_at);
 }

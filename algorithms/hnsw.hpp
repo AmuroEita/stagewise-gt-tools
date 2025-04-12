@@ -1,5 +1,5 @@
 #include "../../hnswlib/hnswlib.h"
-#include "../utils.hpp"
+#include "../index.hpp"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {
@@ -19,6 +19,10 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     int insert_point(T *data, const TagT &tag) {
         index->addPoint(data, tag);
         return 0;
+    }
+
+    void set_query_params(size_t Ls) {
+        index->setEf(Ls);
     }
 
     void search_with_tags(const T *query, size_t k, size_t Ls,

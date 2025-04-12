@@ -270,14 +270,6 @@ bool overall_recall(const std::string &query_file, const uint32_t recall_at,
     int gt_npts, gt_k;
     gt_reader.read(reinterpret_cast<char *>(&gt_npts), sizeof(int));
     gt_reader.read(reinterpret_cast<char *>(&gt_k), sizeof(int));
-    if (gt_npts != static_cast<int>(query_num) ||
-        gt_k < static_cast<int>(recall_at)) {
-        std::cerr << "Ground truth mismatch: npts=" << gt_npts << " vs "
-                  << query_num << ", k=" << gt_k
-                  << " vs recall_at=" << recall_at << std::endl;
-        gt_reader.close();
-        return false;
-    }
 
     std::vector<TagT> gt_ids(gt_npts * gt_k);
     std::vector<float> gt_distances(gt_npts * gt_k);
@@ -288,35 +280,20 @@ bool overall_recall(const std::string &query_file, const uint32_t recall_at,
     gt_reader.close();
 
     uint64_t total_correct = 0;
+    double total_recall = 0.0;
     for (uint32_t i = 0; i < query_num; i++) {
         std::vector<TagT> query_result_tags;
         query_result_tags.reserve(recall_at);
         index->search_with_tags(query.get() + i * query_aligned_dim, recall_at,
                                 Ls, query_result_tags);
 
-        std::unordered_set<TagT> gt_set;
-        uint32_t tie_breaker = recall_at - 1;
-        while (tie_breaker < gt_k &&
-               gt_distances[i * gt_k + tie_breaker] ==
-                   gt_distances[i * gt_k + recall_at - 1]) {
-            tie_breaker++;
-        }
-        for (uint32_t j = 0; j < tie_breaker; j++) {
-            gt_set.insert(gt_ids[i * gt_k + j]);
-        }
-
-        uint32_t correct = 0;
-        for (const auto &tag : query_result_tags) {
-            if (gt_set.count(tag)) {
-                correct++;
-            }
-        }
-        total_correct += correct;
+        double query_recall = calculate_recall(1, gt_ids.data() + i * gt_k, gt_distances.data(), gt_k, query_result_tags.data(), gt_k, recall_at);
+        total_recall += query_recall;
     }
 
     float recall =
         static_cast<float>(total_correct) / (query_num * recall_at) * 100;
-    std::cout << "Recall@" << recall_at << " = " << recall << "%" << std::endl;
+    std::cout << "Recall@" << recall_at << " = " << total_recall / query_num << "%" << std::endl;
 
     return true;
 }

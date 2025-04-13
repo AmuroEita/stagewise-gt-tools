@@ -83,7 +83,8 @@ bool concurrent_bench(const std::string &data_path,
                       const uint32_t recall_at, const uint32_t Ls,
                       const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
-                      std::vector<SearchResult<TagT>> &search_results, Stat &stat) {
+                      std::vector<SearchResult<TagT>> &search_results,
+                      Stat &stat) {
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
               << 1 - write_ratio << std::endl;
@@ -231,14 +232,20 @@ bool concurrent_bench(const std::string &data_path,
     stat.num_points = data_num;
 
     stat.insert_qps = insert_qps;
-    stat.mean_insert_latency = (insert_latency_stats.empty() ? 0.0 : mean_insert_latency);
-    stat.p95_insert_latency = (insert_latency_stats.empty() ? 0.0 : p95_insert_latency);
-    stat.p99_insert_latency = (insert_latency_stats.empty() ? 0.0 : p99_insert_latency);
+    stat.mean_insert_latency =
+        (insert_latency_stats.empty() ? 0.0 : mean_insert_latency);
+    stat.p95_insert_latency =
+        (insert_latency_stats.empty() ? 0.0 : p95_insert_latency);
+    stat.p99_insert_latency =
+        (insert_latency_stats.empty() ? 0.0 : p99_insert_latency);
 
     stat.search_qps = search_qps;
-    stat.mean_search_latency = (search_latency_stats.empty() ? 0.0 : mean_search_latency);
-    stat.p95_search_latency = (search_latency_stats.empty() ? 0.0 : p95_search_latency);
-    stat.p99_search_latency = (search_latency_stats.empty() ? 0.0 : p99_search_latency);
+    stat.mean_search_latency =
+        (search_latency_stats.empty() ? 0.0 : mean_search_latency);
+    stat.p95_search_latency =
+        (search_latency_stats.empty() ? 0.0 : p95_search_latency);
+    stat.p99_search_latency =
+        (search_latency_stats.empty() ? 0.0 : p99_search_latency);
 
     std::cout << "Total time: " << elapsed_sec << " seconds\n"
               << "Insertion Statistics:\n"

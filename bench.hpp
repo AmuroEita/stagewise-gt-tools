@@ -294,13 +294,16 @@ bool overall_recall(const std::string &query_file, const uint32_t recall_at,
         index->search_with_tags(query.get() + i * query_aligned_dim, recall_at,
                                 Ls, query_result_tags);
 
-        double query_recall = calculate_recall(1, gt_ids.data() + i * gt_k, gt_distances.data(), gt_k, query_result_tags.data(), gt_k, recall_at);
+        double query_recall =
+            calculate_recall(1, gt_ids.data() + i * gt_k, gt_distances.data(),
+                             gt_k, query_result_tags.data(), gt_k, recall_at);
         total_recall += query_recall;
     }
 
     float recall =
         static_cast<float>(total_correct) / (query_num * recall_at) * 100;
-    std::cout << "Recall@" << recall_at << " = " << total_recall / query_num << "%" << std::endl;
+    std::cout << "Recall@" << recall_at << " = " << total_recall / query_num
+              << "%" << std::endl;
 
     return true;
 }

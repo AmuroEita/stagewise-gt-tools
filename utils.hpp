@@ -6,12 +6,11 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <iomanip>
-#include <set>
 
 template <typename TagT>
 struct SearchResult {
@@ -370,8 +369,8 @@ void save_stat(Stat &stat, std::string stat_path) {
 }
 
 double calculate_recall(uint32_t num_queries, uint32_t *gold_std,
-    float *gs_dist, uint32_t dim_gs, uint32_t *our_results,
-    uint32_t dim_or, uint32_t recall_at) {
+                        float *gs_dist, uint32_t dim_gs, uint32_t *our_results,
+                        uint32_t dim_or, uint32_t recall_at) {
     double total_recall = 0;
     std::set<uint32_t> gt, res;
 
@@ -385,7 +384,7 @@ double calculate_recall(uint32_t num_queries, uint32_t *gold_std,
             tie_breaker = recall_at - 1;
             float *gt_dist_vec = gs_dist + dim_gs * i;
             while (tie_breaker < dim_gs &&
-                 gt_dist_vec[tie_breaker] == gt_dist_vec[recall_at - 1])
+                   gt_dist_vec[tie_breaker] == gt_dist_vec[recall_at - 1])
                 tie_breaker++;
         }
 
@@ -394,7 +393,7 @@ double calculate_recall(uint32_t num_queries, uint32_t *gold_std,
         uint32_t cur_recall = 0;
         for (auto &v : gt) {
             if (res.find(v) != res.end()) {
-            cur_recall++;
+                cur_recall++;
             }
         }
         total_recall += cur_recall;

@@ -350,7 +350,7 @@ void save_stat(Stat &stat, std::string stat_path) {
     }
 
     if (!file_exists) {
-        file << "index_name,num_points,R,Ls,alpha,num_threads,dataset_name,batch_size,"
+        file << "index_name,num_points,R,Lb,Ls,alpha,num_threads,dataset_name,batch_size,"
              << "write_ratio,insert_qps,insert_mean_latency,insert_p95_latency,"
              << "insert_p99_latency,search_qps,search_mean_latency,search_p95_latency,"
              << "search_p99_latency,overall_recall_at_10,stagewise_result_path,stagewise_recall_path\n";
@@ -358,7 +358,7 @@ void save_stat(Stat &stat, std::string stat_path) {
 
     std::ostringstream ss;
     ss << stat.index_name << "," << stat.num_points << "," << stat.R << ","
-       << stat.Ls << "," << stat.alpha << "," << stat.num_threads << ","
+       << stat.Lb << "," << stat.Ls << "," << stat.alpha << "," << stat.num_threads << ","
        << stat.dataset_name << "," << stat.batch_size << "," << stat.write_ratio
        << "," << stat.insert_qps << "," << stat.mean_insert_latency << ","
        << stat.p95_insert_latency << "," << stat.p99_insert_latency << ","

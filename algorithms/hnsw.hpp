@@ -29,7 +29,7 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
             index->setEf(Ls);
             is_ef_set = true;
         }
-        
+
         auto result = index->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);
@@ -40,5 +40,5 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     size_t dim;
     hnswlib::L2Space space;
     hnswlib::HierarchicalNSW<T> *index;
-    bool is_ef_set = false; 
+    bool is_ef_set = false;
 };

@@ -89,8 +89,8 @@ int main(int argc, char *argv[]) {
     get_bin_metadata(data_path, data_num, data_dim);
     search_results.reserve(data_num * (1 / write_ratio - 1));
 
-    Stat stat("HNSW", dataset_name, R, Lb, Ls, write_ratio, num_threads, batch_size,
-              batch_res_path);
+    Stat stat("HNSW", dataset_name, R, Lb, Ls, write_ratio, num_threads,
+              batch_size, batch_res_path);
 
     if (data_type == "float") {
         using IndexType = HNSW<float, TagT, LabelT>;

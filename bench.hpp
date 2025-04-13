@@ -80,8 +80,8 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string &data_path,
                       const std::string &query_file, const size_t begin_num,
                       const float write_ratio, const size_t batch_size,
-                      const uint32_t recall_at, const uint32_t Ls,
-                      const uint32_t num_threads,
+                      const uint32_t recall_at, 
+                      const uint32_t Ls, const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
                       std::vector<SearchResult<TagT>> &search_results,
                       Stat &stat) {

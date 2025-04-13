@@ -27,6 +27,11 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
 
     void search_with_tags(const T *query, size_t k, size_t Ls,
                           std::vector<TagT> &result_tags) {
+        if (!is_ef_set) {
+            index->setEf(Ls);
+            is_ef_set = true;
+        }
+        
         auto result = index->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);
@@ -37,4 +42,5 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     size_t dim;
     hnswlib::L2Space space;
     hnswlib::HierarchicalNSW<T> *index;
+    bool is_ef_set = false; 
 };

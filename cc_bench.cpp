@@ -60,7 +60,6 @@ int main(int argc, char *argv[]) {
                                     {"query_path", required_argument, 0, 'q'},
                                     {"batch_res_path", required_argument, 0, 'b'},
                                     {"begin_num", required_argument, 0, 'i'},
-                                    {"max_elements", required_argument, 0, 'm'},
                                     {"write_ratio", required_argument, 0, 'w'},
                                     {"batch_size", required_argument, 0, 's'},
                                     {"recall_at", required_argument, 0, 'r'},
@@ -82,7 +81,6 @@ int main(int argc, char *argv[]) {
             case 'q': query_path = optarg; break;
             case 'b': batch_res_path = optarg; break;
             case 'i': begin_num = std::stoul(optarg); break;
-            case 'm': /* max_elements */ break;
             case 'w': write_ratio = std::stof(optarg); break;
             case 's': batch_size = std::stoul(optarg); break;
             case 'r': recall_at = std::stoul(optarg); break;

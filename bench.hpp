@@ -14,6 +14,7 @@
 #include <queue>
 #include <thread>
 #include <vector>
+#include <omp.h>
 
 #include "utils.hpp"
 
@@ -29,6 +30,8 @@ bool concurrent_bench(const std::string &data_path,
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
               << 1 - write_ratio << std::endl;
+
+    omp_set_num_threads(num_threads);
 
     size_t data_num, data_dim, aligned_dim;
     get_bin_metadata(data_path, data_num, data_dim);
@@ -56,7 +59,6 @@ bool concurrent_bench(const std::string &data_path,
     std::mutex last_except_mutex, result_mutex, insert_latency_mutex,
         search_latency_mutex;
     std::vector<double> insert_latency_stats, search_latency_stats;
-    ThreadPool pool(num_threads);
 
     auto succeed_insert_count = std::make_shared<std::atomic<size_t>>(0);
     auto failed_insert_count = std::make_shared<std::atomic<size_t>>(0);
@@ -132,8 +134,6 @@ bool concurrent_bench(const std::string &data_path,
 
         start_search_offset = end_search_offset;
     }
-
-    pool.wait_for_tasks();
 
     auto et = std::chrono::high_resolution_clock::now();
     double elapsed_sec = std::chrono::duration<double>(et - st).count();

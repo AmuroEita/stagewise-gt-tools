@@ -13,12 +13,12 @@
 #include <mutex>
 #include <numeric>
 #include <queue>
+#include <random>
 #include <thread>
 #include <vector>
-#include <random>
 
-#include "utils.hpp"
 #include "algorithms/hnsw.hpp"
+#include "utils.hpp"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string &data_path,
@@ -28,8 +28,7 @@ bool concurrent_bench(const std::string &data_path,
                       const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
                       std::vector<SearchResult<TagT>> &search_results,
-                      Stat &stat,
-                      bool query_new_data = false) {
+                      Stat &stat, bool query_new_data = false) {
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
               << 1 - write_ratio << std::endl;
@@ -100,39 +99,45 @@ bool concurrent_bench(const std::string &data_path,
         }
 
         if (query_new_data) {
-            size_t new_search_batch_size = batch_size * ((1 - write_ratio) / write_ratio);
+            size_t new_search_batch_size =
+                batch_size * ((1 - write_ratio) / write_ratio);
             std::vector<T *> new_batch_queries;
             std::vector<size_t> new_batch_query_indices;
-            
+
             std::vector<size_t> indices(batch_size);
             std::iota(indices.begin(), indices.end(), start_insert_offset);
             std::random_device rd;
             std::mt19937 g(rd());
             std::shuffle(indices.begin(), indices.end(), g);
-            
-            for (size_t i = 0; i < new_search_batch_size && i < batch_size; ++i) {
+
+            for (size_t i = 0; i < new_search_batch_size && i < batch_size;
+                 ++i) {
                 size_t idx = indices[i];
-                new_batch_queries.push_back(&data.get()[(idx + begin_num) * aligned_dim]);
+                new_batch_queries.push_back(
+                    &data.get()[(idx + begin_num) * aligned_dim]);
                 new_batch_query_indices.push_back(idx + begin_num);
             }
 
             auto new_search_qs = std::chrono::high_resolution_clock::now();
             std::vector<std::vector<TagT>> new_batch_results;
             new_batch_results.reserve(new_batch_queries.size());
-            index->batch_search(new_batch_queries, recall_at, Ls, new_batch_results);
+            index->batch_search(new_batch_queries, recall_at, Ls,
+                                new_batch_results);
 
             auto new_search_qe = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> new_search_diff = new_search_qe - new_search_qs;
+            std::chrono::duration<double> new_search_diff =
+                new_search_qe - new_search_qs;
             {
                 std::unique_lock<std::mutex> lock(search_latency_mutex);
-                search_latency_stats.push_back((float)(new_search_diff.count() * 1000000));
+                search_latency_stats.push_back(
+                    (float)(new_search_diff.count() * 1000000));
             }
             {
                 std::unique_lock<std::mutex> lock(result_mutex);
                 for (size_t i = 0; i < new_batch_results.size(); ++i) {
-                    search_results.emplace_back(begin_num + end_insert_offset, 
-                                             new_batch_query_indices[i],
-                                             new_batch_results[i]);
+                    search_results.emplace_back(begin_num + end_insert_offset,
+                                                new_batch_query_indices[i],
+                                                new_batch_results[i]);
                 }
             }
         }
@@ -143,11 +148,13 @@ bool concurrent_bench(const std::string &data_path,
             end_search_offset =
                 std::min(start_search_offset + search_batch_size, search_total);
             size_t cur_offset = begin_num + end_insert_offset;
-            std::cout << "Searching with search_offset=" << cur_offset << std::endl;
+            std::cout << "Searching with search_offset=" << cur_offset
+                      << std::endl;
 
             std::vector<T *> batch_queries;
             std::vector<size_t> batch_query_indices;
-            for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
+            for (size_t idx = start_search_offset; idx < end_search_offset;
+                 ++idx) {
                 if (++query_idx >= query_num) query_idx %= query_num;
                 batch_queries.push_back(query.get() +
                                         query_idx * query_aligned_dim);
@@ -169,8 +176,8 @@ bool concurrent_bench(const std::string &data_path,
             {
                 std::unique_lock<std::mutex> lock(result_mutex);
                 for (size_t i = 0; i < batch_results.size(); ++i) {
-                    search_results.emplace_back(cur_offset, batch_query_indices[i],
-                                                batch_results[i]);
+                    search_results.emplace_back(
+                        cur_offset, batch_query_indices[i], batch_results[i]);
                 }
             }
 

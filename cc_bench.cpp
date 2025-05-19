@@ -9,33 +9,37 @@
 #include "utils.hpp"
 
 void print_help() {
-    std::cout << "HNSW-Bench Usage:\n"
-              << "Usage: ./cc_bench [options]\n\n"
-              << "Options:\n"
-              << "  -h, --help                Show this help message\n"
-              << "  -d, --dataset_name NAME   Name of the dataset\n"
-              << "  -t, --data_type TYPE      Type of the data\n"
-              << "  -p, --data_path PATH      Path to the data file\n"
-              << "  -q, --query_path PATH     Path to the query file\n"
-              << "  -b, --batch_res_path PATH Path to save batch results\n"
-              << "  -i, --begin_num NUM       Initial number of points to build\n"
-              << "  -m, --max_elements NUM    Maximum number of elements\n"
-              << "  -w, --write_ratio RATIO   Write ratio (0-1)\n"
-              << "  -s, --batch_size NUM      Batch size for processing\n"
-              << "  -r, --recall_at NUM       k value for recall calculation\n"
-              << "  -R, --R NUM               R parameter for index\n"
-              << "  -L, --Lb NUM              Lb parameter for index\n"
-              << "  -l, --Ls NUM              Ls parameter for search\n"
-              << "  -n, --num_threads NUM     Number of threads\n"
-              << "  -g, --gt_path PATH        Path to the ground truth file\n"
-              << "  -o, --stat_path PATH      Path to save statistics\n\n"
-              << "Example:\n"
-              << "  ./cc_bench -d sift -t float -p data.bin -q query.bin -b results/ -i 10000 -m 1000000 "
-              << "-w 0.5 -s 1000 -r 10 -R 16 -L 32 -l 100 -n 16 -g gt.bin -o stats.csv\n";
+    std::cout
+        << "HNSW-Bench Usage:\n"
+        << "Usage: ./cc_bench [options]\n\n"
+        << "Options:\n"
+        << "  -h, --help                Show this help message\n"
+        << "  -d, --dataset_name NAME   Name of the dataset\n"
+        << "  -t, --data_type TYPE      Type of the data\n"
+        << "  -p, --data_path PATH      Path to the data file\n"
+        << "  -q, --query_path PATH     Path to the query file\n"
+        << "  -b, --batch_res_path PATH Path to save batch results\n"
+        << "  -i, --begin_num NUM       Initial number of points to build\n"
+        << "  -m, --max_elements NUM    Maximum number of elements\n"
+        << "  -w, --write_ratio RATIO   Write ratio (0-1)\n"
+        << "  -s, --batch_size NUM      Batch size for processing\n"
+        << "  -r, --recall_at NUM       k value for recall calculation\n"
+        << "  -R, --R NUM               R parameter for index\n"
+        << "  -L, --Lb NUM              Lb parameter for index\n"
+        << "  -l, --Ls NUM              Ls parameter for search\n"
+        << "  -n, --num_threads NUM     Number of threads\n"
+        << "  -g, --gt_path PATH        Path to the ground truth file\n"
+        << "  -o, --stat_path PATH      Path to save statistics\n\n"
+        << "Example:\n"
+        << "  ./cc_bench -d sift -t float -p data.bin -q query.bin -b results/ "
+           "-i 10000 -m 1000000 "
+        << "-w 0.5 -s 1000 -r 10 -R 16 -L 32 -l 100 -n 16 -g gt.bin -o "
+           "stats.csv\n";
 }
 
 int main(int argc, char *argv[]) {
-    if (argc == 1 || (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))) {
+    if (argc == 1 || (argc == 2 && (strcmp(argv[1], "-h") == 0 ||
+                                    strcmp(argv[1], "--help") == 0))) {
         print_help();
         return 0;
     }
@@ -73,7 +77,8 @@ int main(int argc, char *argv[]) {
 
     int option_index = 0;
     int c;
-    while ((c = getopt_long(argc, argv, "d:t:p:q:b:i:m:w:s:r:R:L:l:D:n:g:o:h", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "d:t:p:q:b:i:m:w:s:r:R:L:l:D:n:g:o:h",
+                            long_options, &option_index)) != -1) {
         switch (c) {
             case 'd': dataset_name = optarg; break;
             case 't': data_type = optarg; break;

@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <papi.h>
 #include <sys/resource.h>
 
@@ -14,7 +15,6 @@
 #include <queue>
 #include <thread>
 #include <vector>
-#include <omp.h>
 
 #include "utils.hpp"
 

@@ -5,7 +5,7 @@
 #include <string>
 
 #include "algorithms/hnsw.hpp"
-#include "bench.hpp"
+#include "algo_bench.hpp"
 #include "utils.hpp"
 
 void print_help() {

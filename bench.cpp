@@ -4,8 +4,8 @@
 #include <iostream>
 #include <string>
 
-#include "algorithms/hnsw.hpp"
 #include "algo_bench.hpp"
+#include "algorithms/hnsw.hpp"
 #include "utils.hpp"
 
 void print_help() {

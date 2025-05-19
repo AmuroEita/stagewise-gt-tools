@@ -71,7 +71,7 @@ bool concurrent_bench(const std::string &data_path,
         std::cout << "Inserting with insert_offset="
                   << begin_num + end_insert_offset << std::endl;
 
-        std::vector<T*> batch_data;
+        std::vector<T *> batch_data;
         std::vector<TagT> batch_tags;
         for (size_t idx = start_insert_offset; idx < end_insert_offset; ++idx) {
             batch_data.push_back(&data.get()[(idx + begin_num) * aligned_dim]);
@@ -81,9 +81,11 @@ bool concurrent_bench(const std::string &data_path,
         auto qs = std::chrono::high_resolution_clock::now();
         int insert_result = index->batch_insert(batch_data, batch_tags);
         if (insert_result != 0)
-            failed_insert_count->fetch_add(batch_data.size(), std::memory_order_seq_cst);
+            failed_insert_count->fetch_add(batch_data.size(),
+                                           std::memory_order_seq_cst);
         else
-            succeed_insert_count->fetch_add(batch_data.size(), std::memory_order_seq_cst);
+            succeed_insert_count->fetch_add(batch_data.size(),
+                                            std::memory_order_seq_cst);
 
         auto qe = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> diff = qe - qs;
@@ -99,11 +101,12 @@ bool concurrent_bench(const std::string &data_path,
         size_t cur_offset = begin_num + end_insert_offset;
         std::cout << "Searching with search_offset=" << cur_offset << std::endl;
 
-        std::vector<T*> batch_queries;
+        std::vector<T *> batch_queries;
         std::vector<size_t> batch_query_indices;
         for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
             if (++query_idx >= query_num) query_idx %= query_num;
-            batch_queries.push_back(query.get() + query_idx * query_aligned_dim);
+            batch_queries.push_back(query.get() +
+                                    query_idx * query_aligned_dim);
             batch_query_indices.push_back(query_idx);
         }
 
@@ -111,17 +114,19 @@ bool concurrent_bench(const std::string &data_path,
         std::vector<std::vector<TagT>> batch_results;
         batch_results.reserve(batch_queries.size());
         index->batch_search(batch_queries, recall_at, Ls, batch_results);
-        
+
         auto search_qe = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> search_diff = search_qe - search_qs;
         {
             std::unique_lock<std::mutex> lock(search_latency_mutex);
-            search_latency_stats.push_back((float)(search_diff.count() * 1000000));
+            search_latency_stats.push_back(
+                (float)(search_diff.count() * 1000000));
         }
         {
             std::unique_lock<std::mutex> lock(result_mutex);
             for (size_t i = 0; i < batch_results.size(); ++i) {
-                search_results.emplace_back(cur_offset, batch_query_indices[i], batch_results[i]);
+                search_results.emplace_back(cur_offset, batch_query_indices[i],
+                                            batch_results[i]);
             }
         }
 

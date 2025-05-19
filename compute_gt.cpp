@@ -45,8 +45,7 @@ float euclidean_distance_simd(const std::vector<float> &a,
 
 std::vector<PointPair> exact_knn(const std::vector<float> &query,
                                  const std::vector<std::vector<float>> &base,
-                                 size_t b_size, int k,
-                                 size_t start_idx = 0) {
+                                 size_t b_size, int k, size_t start_idx = 0) {
     using HeapPair = std::pair<float, int>;
     std::priority_queue<HeapPair, std::vector<HeapPair>, std::less<HeapPair>>
         max_heap;
@@ -106,13 +105,11 @@ std::vector<std::vector<PointPair>> compute_batch_groundtruth(
 }
 
 std::vector<std::vector<PointPair>> compute_batch_groundtruth_new_data(
-    const std::vector<std::vector<float>> &base,
-    size_t b_size, 
-    int k,
+    const std::vector<std::vector<float>> &base, size_t b_size, int k,
     size_t batch_size) {
     size_t start_idx = b_size > batch_size ? b_size - batch_size : 0;
     size_t num_queries = b_size - start_idx;
-    
+
     std::vector<std::vector<PointPair>> results(num_queries);
     size_t num_threads = std::thread::hardware_concurrency();
     std::vector<std::thread> threads;
@@ -135,9 +132,9 @@ std::vector<std::vector<PointPair>> compute_batch_groundtruth_new_data(
         thread.join();
     }
 
-    std::cout << "Computed groundtruth for base size " << b_size 
-              << " (new data mode, using " << num_queries << " new points as queries)" 
-              << std::endl;
+    std::cout << "Computed groundtruth for base size " << b_size
+              << " (new data mode, using " << num_queries
+              << " new points as queries)" << std::endl;
     return results;
 }
 
@@ -304,8 +301,7 @@ Args parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     Args args = parse_args(argc, argv);
 
-    if (args.base_path.empty() || args.k <= 0 ||
-        args.data_type.empty() ||
+    if (args.base_path.empty() || args.k <= 0 || args.data_type.empty() ||
         (args.gt_path.empty() && args.batch_gt_path.empty())) {
         std::cerr
             << "Error: Missing required arguments (base_path, "
@@ -315,7 +311,8 @@ int main(int argc, char *argv[]) {
     }
 
     if (!args.query_new_data && args.query_path.empty()) {
-        std::cerr << "Error: query_path is required when not in new data mode" << std::endl;
+        std::cerr << "Error: query_path is required when not in new data mode"
+                  << std::endl;
         return 1;
     }
 
@@ -339,12 +336,15 @@ int main(int argc, char *argv[]) {
              b_size += increment) {
             std::cout << "Processing base size " << b_size
                       << " for batch groundtruth" << std::endl;
-            auto batch_gt = args.query_new_data ? 
-                compute_batch_groundtruth_new_data(base, b_size, args.k, increment) :
-                compute_batch_groundtruth(base, queries, b_size, args.k);
+            auto batch_gt =
+                args.query_new_data
+                    ? compute_batch_groundtruth_new_data(base, b_size, args.k,
+                                                         increment)
+                    : compute_batch_groundtruth(base, queries, b_size, args.k);
             all_batches.push_back(batch_gt);
         }
-        save_to_bin(all_batches, args.batch_gt_path, args.k, args.query_new_data);
+        save_to_bin(all_batches, args.batch_gt_path, args.k,
+                    args.query_new_data);
     }
 
     if (!args.gt_path.empty()) {

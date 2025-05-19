@@ -45,12 +45,13 @@ float euclidean_distance_simd(const std::vector<float> &a,
 
 std::vector<PointPair> exact_knn(const std::vector<float> &query,
                                  const std::vector<std::vector<float>> &base,
-                                 size_t b_size, int k) {
+                                 size_t b_size, int k,
+                                 size_t start_idx = 0) {
     using HeapPair = std::pair<float, int>;
     std::priority_queue<HeapPair, std::vector<HeapPair>, std::less<HeapPair>>
         max_heap;
 
-    for (size_t j = 0; j < b_size && j < base.size(); ++j) {
+    for (size_t j = start_idx; j < b_size && j < base.size(); ++j) {
         float dist = euclidean_distance_simd(query, base[j]);
         if (max_heap.size() < static_cast<size_t>(k)) {
             max_heap.emplace(dist, static_cast<int>(j));
@@ -104,6 +105,42 @@ std::vector<std::vector<PointPair>> compute_batch_groundtruth(
     return results;
 }
 
+std::vector<std::vector<PointPair>> compute_batch_groundtruth_new_data(
+    const std::vector<std::vector<float>> &base,
+    size_t b_size, 
+    int k,
+    size_t batch_size) {
+    size_t start_idx = b_size > batch_size ? b_size - batch_size : 0;
+    size_t num_queries = b_size - start_idx;
+    
+    std::vector<std::vector<PointPair>> results(num_queries);
+    size_t num_threads = std::thread::hardware_concurrency();
+    std::vector<std::thread> threads;
+    size_t chunk_size = (num_queries + num_threads - 1) / num_threads;
+
+    auto worker = [&](size_t start, size_t end) {
+        for (size_t i = start; i < end && i < num_queries; ++i) {
+            size_t query_idx = start_idx + i;
+            results[i] = exact_knn(base[query_idx], base, b_size, k, start_idx);
+        }
+    };
+
+    for (size_t t = 0; t < num_threads; ++t) {
+        size_t start = t * chunk_size;
+        size_t end = std::min(start + chunk_size, num_queries);
+        threads.emplace_back(worker, start, end);
+    }
+
+    for (auto &thread : threads) {
+        thread.join();
+    }
+
+    std::cout << "Computed groundtruth for base size " << b_size 
+              << " (new data mode, using " << num_queries << " new points as queries)" 
+              << std::endl;
+    return results;
+}
+
 std::vector<std::vector<float>> read_fvecs(const std::string &filename) {
     std::ifstream in(filename, std::ios::binary);
     if (!in.is_open())
@@ -134,7 +171,7 @@ std::vector<std::vector<float>> read_fvecs(const std::string &filename) {
 
 void save_to_bin(
     const std::vector<std::vector<std::vector<PointPair>>> &all_batches,
-    const std::string &filename, int k) {
+    const std::string &filename, int k, bool new_data_mode = false) {
     std::ofstream out(filename, std::ios::binary);
     if (!out.is_open())
         throw std::runtime_error("Failed to open file: " + filename);
@@ -239,6 +276,7 @@ struct Args {
     std::string data_type;
     std::string dist_func;
     int k = 100;
+    bool query_new_data = false;
 };
 
 Args parse_args(int argc, char *argv[]) {
@@ -257,6 +295,8 @@ Args parse_args(int argc, char *argv[]) {
             args.data_type = argv[++i];
         else if (arg == "--k" && i + 1 < argc)
             args.k = std::stoi(argv[++i]);
+        else if (arg == "--query_new_data")
+            args.query_new_data = true;
     }
     return args;
 }
@@ -264,18 +304,26 @@ Args parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     Args args = parse_args(argc, argv);
 
-    if (args.base_path.empty() || args.query_path.empty() || args.k <= 0 ||
+    if (args.base_path.empty() || args.k <= 0 ||
         args.data_type.empty() ||
         (args.gt_path.empty() && args.batch_gt_path.empty())) {
         std::cerr
-            << "Error: Missing required arguments (base_path, query_path, "
+            << "Error: Missing required arguments (base_path, "
                "data_type, k, and at least one of gt_path or batch_gt_path)"
             << std::endl;
         return 1;
     }
 
+    if (!args.query_new_data && args.query_path.empty()) {
+        std::cerr << "Error: query_path is required when not in new data mode" << std::endl;
+        return 1;
+    }
+
     std::vector<std::vector<float>> base = read_fvecs(args.base_path);
-    std::vector<std::vector<float>> queries = read_fvecs(args.query_path);
+    std::vector<std::vector<float>> queries;
+    if (!args.query_new_data) {
+        queries = read_fvecs(args.query_path);
+    }
 
     std::cout << "Computing groundtruth for " << args.k << " nearest neighbors"
               << std::endl;
@@ -291,11 +339,12 @@ int main(int argc, char *argv[]) {
              b_size += increment) {
             std::cout << "Processing base size " << b_size
                       << " for batch groundtruth" << std::endl;
-            auto batch_gt =
+            auto batch_gt = args.query_new_data ? 
+                compute_batch_groundtruth_new_data(base, b_size, args.k, increment) :
                 compute_batch_groundtruth(base, queries, b_size, args.k);
             all_batches.push_back(batch_gt);
         }
-        save_to_bin(all_batches, args.batch_gt_path, args.k);
+        save_to_bin(all_batches, args.batch_gt_path, args.k, args.query_new_data);
     }
 
     if (!args.gt_path.empty()) {

@@ -15,8 +15,10 @@
 #include <queue>
 #include <thread>
 #include <vector>
+#include <random>
 
 #include "utils.hpp"
+#include "algorithms/hnsw.hpp"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string &data_path,
@@ -26,7 +28,8 @@ bool concurrent_bench(const std::string &data_path,
                       const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
                       std::vector<SearchResult<TagT>> &search_results,
-                      Stat &stat) {
+                      Stat &stat,
+                      bool query_new_data = false) {
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
               << 1 - write_ratio << std::endl;
@@ -96,43 +99,83 @@ bool concurrent_bench(const std::string &data_path,
             insert_latency_stats.push_back((float)(diff.count() * 1000000));
         }
 
-        start_insert_offset = end_insert_offset;
+        if (query_new_data) {
+            size_t new_search_batch_size = batch_size * ((1 - write_ratio) / write_ratio);
+            std::vector<T *> new_batch_queries;
+            std::vector<size_t> new_batch_query_indices;
+            
+            std::vector<size_t> indices(batch_size);
+            std::iota(indices.begin(), indices.end(), start_insert_offset);
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::shuffle(indices.begin(), indices.end(), g);
+            
+            for (size_t i = 0; i < new_search_batch_size && i < batch_size; ++i) {
+                size_t idx = indices[i];
+                new_batch_queries.push_back(&data.get()[(idx + begin_num) * aligned_dim]);
+                new_batch_query_indices.push_back(idx + begin_num);
+            }
 
-        end_search_offset =
-            std::min(start_search_offset + search_batch_size, search_total);
-        size_t cur_offset = begin_num + end_insert_offset;
-        std::cout << "Searching with search_offset=" << cur_offset << std::endl;
+            auto new_search_qs = std::chrono::high_resolution_clock::now();
+            std::vector<std::vector<TagT>> new_batch_results;
+            new_batch_results.reserve(new_batch_queries.size());
+            index->batch_search(new_batch_queries, recall_at, Ls, new_batch_results);
 
-        std::vector<T *> batch_queries;
-        std::vector<size_t> batch_query_indices;
-        for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
-            if (++query_idx >= query_num) query_idx %= query_num;
-            batch_queries.push_back(query.get() +
-                                    query_idx * query_aligned_dim);
-            batch_query_indices.push_back(query_idx);
-        }
-
-        auto search_qs = std::chrono::high_resolution_clock::now();
-        std::vector<std::vector<TagT>> batch_results;
-        batch_results.reserve(batch_queries.size());
-        index->batch_search(batch_queries, recall_at, Ls, batch_results);
-
-        auto search_qe = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> search_diff = search_qe - search_qs;
-        {
-            std::unique_lock<std::mutex> lock(search_latency_mutex);
-            search_latency_stats.push_back(
-                (float)(search_diff.count() * 1000000));
-        }
-        {
-            std::unique_lock<std::mutex> lock(result_mutex);
-            for (size_t i = 0; i < batch_results.size(); ++i) {
-                search_results.emplace_back(cur_offset, batch_query_indices[i],
-                                            batch_results[i]);
+            auto new_search_qe = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> new_search_diff = new_search_qe - new_search_qs;
+            {
+                std::unique_lock<std::mutex> lock(search_latency_mutex);
+                search_latency_stats.push_back((float)(new_search_diff.count() * 1000000));
+            }
+            {
+                std::unique_lock<std::mutex> lock(result_mutex);
+                for (size_t i = 0; i < new_batch_results.size(); ++i) {
+                    search_results.emplace_back(begin_num + end_insert_offset, 
+                                             new_batch_query_indices[i],
+                                             new_batch_results[i]);
+                }
             }
         }
 
-        start_search_offset = end_search_offset;
+        start_insert_offset = end_insert_offset;
+
+        if (!query_new_data) {
+            end_search_offset =
+                std::min(start_search_offset + search_batch_size, search_total);
+            size_t cur_offset = begin_num + end_insert_offset;
+            std::cout << "Searching with search_offset=" << cur_offset << std::endl;
+
+            std::vector<T *> batch_queries;
+            std::vector<size_t> batch_query_indices;
+            for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
+                if (++query_idx >= query_num) query_idx %= query_num;
+                batch_queries.push_back(query.get() +
+                                        query_idx * query_aligned_dim);
+                batch_query_indices.push_back(query_idx);
+            }
+
+            auto search_qs = std::chrono::high_resolution_clock::now();
+            std::vector<std::vector<TagT>> batch_results;
+            batch_results.reserve(batch_queries.size());
+            index->batch_search(batch_queries, recall_at, Ls, batch_results);
+
+            auto search_qe = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> search_diff = search_qe - search_qs;
+            {
+                std::unique_lock<std::mutex> lock(search_latency_mutex);
+                search_latency_stats.push_back(
+                    (float)(search_diff.count() * 1000000));
+            }
+            {
+                std::unique_lock<std::mutex> lock(result_mutex);
+                for (size_t i = 0; i < batch_results.size(); ++i) {
+                    search_results.emplace_back(cur_offset, batch_query_indices[i],
+                                                batch_results[i]);
+                }
+            }
+
+            start_search_offset = end_search_offset;
+        }
     }
 
     auto et = std::chrono::high_resolution_clock::now();
@@ -169,28 +212,26 @@ bool concurrent_bench(const std::string &data_path,
             : (float)search_latency_stats[(uint64_t)(0.999 * search_total)];
 
     stat.num_points = data_num;
-
     stat.insert_qps = insert_qps;
-    stat.mean_insert_latency =
-        (insert_latency_stats.empty() ? 0.0 : mean_insert_latency);
-    stat.p95_insert_latency =
-        (insert_latency_stats.empty() ? 0.0 : p95_insert_latency);
-    stat.p99_insert_latency =
-        (insert_latency_stats.empty() ? 0.0 : p99_insert_latency);
-
+    stat.mean_insert_latency = mean_insert_latency;
+    stat.p95_insert_latency = p95_insert_latency;
+    stat.p99_insert_latency = p99_insert_latency;
     stat.search_qps = search_qps;
-    stat.mean_search_latency =
-        (search_latency_stats.empty() ? 0.0 : mean_search_latency);
-    stat.p95_search_latency =
-        (search_latency_stats.empty() ? 0.0 : p95_search_latency);
-    stat.p99_search_latency =
-        (search_latency_stats.empty() ? 0.0 : p99_search_latency);
+    stat.mean_search_latency = mean_search_latency;
+    stat.p95_search_latency = p95_search_latency;
+    stat.p99_search_latency = p99_search_latency;
 
     std::cout << "Total time: " << elapsed_sec << " seconds\n"
               << "Insertion Statistics:\n"
               << "  Overall throughput: " << insert_qps << " points/second\n"
+              << "  Mean latency: " << mean_insert_latency << " us\n"
+              << "  P95 latency: " << p95_insert_latency << " us\n"
+              << "  P99 latency: " << p99_insert_latency << " us\n"
               << "Search Statistics:\n"
-              << "  Overall throughput: " << search_qps << " points/second\n";
+              << "  Overall throughput: " << search_qps << " points/second\n"
+              << "  Mean latency: " << mean_search_latency << " us\n"
+              << "  P95 latency: " << p95_search_latency << " us\n"
+              << "  P99 latency: " << p99_search_latency << " us\n";
 
     return true;
 }

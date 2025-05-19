@@ -51,7 +51,7 @@ struct Stat {
     std::string index_name;
     uint32_t num_points;
     uint32_t R;
-    uint32_t Ls;    
+    uint32_t Ls;
     uint32_t Lb;
     float alpha = 1.2;
     uint32_t num_threads;
@@ -72,23 +72,23 @@ struct Stat {
     float overall_recall_at_10;
     std::string stagewise_result_path;
 
-    Stat(std::string idx_name, std::string ds_name, uint32_t r, uint32_t lb, 
-        uint32_t ls, float wr, uint32_t threads, uint32_t batch_size, std::string res_path)
+    Stat(std::string idx_name, std::string ds_name, uint32_t r, uint32_t lb,
+         uint32_t ls, float wr, uint32_t threads, uint32_t batch_size,
+         std::string res_path)
         : index_name(idx_name),
           dataset_name(ds_name),
           R(r),
           Lb(lb),
           Ls(ls),
           num_threads(threads),
-          write_ratio(),
+          write_ratio(wr),
           alpha(1.2f),
           batch_size(100),
-          stagewise_result_path(res_path + "/" + index_name + "_" +
-                                dataset_name + "_R" + std::to_string(r) +
-                                "_Lb" + std::to_string(lb) +
-                                "_Ls" + std::to_string(ls) + "_w" +
-                                to_string_with_precision(wr) + "_t" +
-                                std::to_string(threads) + ".res") {}
+          stagewise_result_path(
+              res_path + "/" + index_name + "_" + dataset_name + "_R" +
+              std::to_string(r) + "_Lb" + std::to_string(lb) + "_Ls" +
+              std::to_string(ls) + "_w" + to_string_with_precision(wr) + "_t" +
+              std::to_string(threads) + ".res") {}
 };
 
 void read_results(std::vector<SearchResult<uint32_t>> &res,
@@ -352,8 +352,10 @@ void save_stat(Stat &stat, std::string stat_path) {
     if (!file_exists) {
         file << "index_name,num_points,R,Lb,Ls,alpha,num_threads,dataset_name,batch_size,"
              << "write_ratio,insert_qps,insert_mean_latency,insert_p95_latency,"
-             << "insert_p99_latency,search_qps,search_mean_latency,search_p95_latency,"
-             << "search_p99_latency,overall_recall_at_10,stagewise_result_path,stagewise_recall_path\n";
+             << "insert_p99_latency,search_qps,search_mean_latency,search_p95_"
+                "latency,"
+             << "search_p99_latency,overall_recall_at_10(%),stagewise_result_path,"
+                "stagewise_recall_path\n";
     }
 
     std::ostringstream ss;

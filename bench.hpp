@@ -80,8 +80,8 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string &data_path,
                       const std::string &query_file, const size_t begin_num,
                       const float write_ratio, const size_t batch_size,
-                      const uint32_t recall_at, 
-                      const uint32_t Ls, const uint32_t num_threads,
+                      const uint32_t recall_at, const uint32_t Ls,
+                      const uint32_t num_threads,
                       std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
                       std::vector<SearchResult<TagT>> &search_results,
                       Stat &stat) {
@@ -260,7 +260,7 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool overall_recall(const std::string &query_file, const uint32_t recall_at,
                     const uint32_t Ls,
                     std::unique_ptr<IndexBase<T, TagT, LabelT>> &&index,
-                    const std::string &gt_path) {
+                    const std::string &gt_path, Stat &stat) {
     size_t query_num, query_dim, query_aligned_dim;
     T *raw_query = nullptr;
     load_aligned_bin(query_file, raw_query, query_num, query_dim,
@@ -300,9 +300,8 @@ bool overall_recall(const std::string &query_file, const uint32_t recall_at,
         total_recall += query_recall;
     }
 
-    float recall =
-        static_cast<float>(total_correct) / (query_num * recall_at) * 100;
-    std::cout << "Recall@" << recall_at << " = " << total_recall / query_num
+    stat.overall_recall_at_10 = total_recall / query_num;
+    std::cout << "Recall@" << recall_at << " = " << stat.overall_recall_at_10
               << "%" << std::endl;
 
     return true;

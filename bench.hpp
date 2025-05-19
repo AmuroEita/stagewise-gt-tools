@@ -17,65 +17,6 @@
 
 #include "utils.hpp"
 
-class ThreadPool {
-   public:
-    ThreadPool(size_t num_threads) : stop(false) {
-        for (size_t i = 0; i < num_threads; ++i) {
-            workers.emplace_back([this] {
-                while (true) {
-                    std::function<void()> task;
-                    {
-                        std::unique_lock<std::mutex> lock(queue_mutex);
-                        condition.wait(
-                            lock, [this] { return stop || !tasks.empty(); });
-                        if (stop && tasks.empty()) return;
-                        task = std::move(tasks.front());
-                        tasks.pop();
-                    }
-                    task();
-                }
-            });
-        }
-    }
-
-    ~ThreadPool() {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            stop = true;
-        }
-        condition.notify_all();
-        for (std::thread &worker : workers) {
-            worker.join();
-        }
-    }
-
-    void enqueue_task(std::function<void()> task) {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            if (stop) return;
-            tasks.emplace(std::move(task));
-        }
-        condition.notify_one();
-    }
-
-    void wait_for_tasks() {
-        while (true) {
-            {
-                std::unique_lock<std::mutex> lock(queue_mutex);
-                if (tasks.empty()) break;
-            }
-            std::this_thread::yield();
-        }
-    }
-
-   private:
-    std::vector<std::thread> workers;
-    std::queue<std::function<void()>> tasks;
-    std::mutex queue_mutex;
-    std::condition_variable condition;
-    bool stop;
-};
-
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 bool concurrent_bench(const std::string &data_path,
                       const std::string &query_file, const size_t begin_num,
@@ -130,67 +71,60 @@ bool concurrent_bench(const std::string &data_path,
         std::cout << "Inserting with insert_offset="
                   << begin_num + end_insert_offset << std::endl;
 
+        std::vector<T*> batch_data;
+        std::vector<TagT> batch_tags;
         for (size_t idx = start_insert_offset; idx < end_insert_offset; ++idx) {
-            pool.enqueue_task([&, idx] {
-                try {
-                    auto qs = std::chrono::high_resolution_clock::now();
-                    int insert_result = index->insert_point(
-                        &data.get()[(idx + begin_num) * aligned_dim],
-                        static_cast<TagT>(idx + begin_num));
-                    if (insert_result != 0)
-                        failed_insert_count->fetch_add(
-                            1, std::memory_order_seq_cst);
-                    else
-                        succeed_insert_count->fetch_add(
-                            1, std::memory_order_seq_cst);
-
-                    auto qe = std::chrono::high_resolution_clock::now();
-                    std::chrono::duration<double> diff = qe - qs;
-                    {
-                        std::unique_lock<std::mutex> lock(insert_latency_mutex);
-                        insert_latency_stats.push_back(
-                            (float)(diff.count() * 1000000));
-                    }
-                } catch (...) {
-                    std::unique_lock<std::mutex> lock(last_except_mutex);
-                    last_exception = std::current_exception();
-                }
-            });
+            batch_data.push_back(&data.get()[(idx + begin_num) * aligned_dim]);
+            batch_tags.push_back(static_cast<TagT>(idx + begin_num));
         }
+
+        auto qs = std::chrono::high_resolution_clock::now();
+        int insert_result = index->batch_insert(batch_data, batch_tags);
+        if (insert_result != 0)
+            failed_insert_count->fetch_add(batch_data.size(), std::memory_order_seq_cst);
+        else
+            succeed_insert_count->fetch_add(batch_data.size(), std::memory_order_seq_cst);
+
+        auto qe = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> diff = qe - qs;
+        {
+            std::unique_lock<std::mutex> lock(insert_latency_mutex);
+            insert_latency_stats.push_back((float)(diff.count() * 1000000));
+        }
+
         start_insert_offset = end_insert_offset;
 
         end_search_offset =
             std::min(start_search_offset + search_batch_size, search_total);
         size_t cur_offset = begin_num + end_insert_offset;
         std::cout << "Searching with search_offset=" << cur_offset << std::endl;
+
+        std::vector<T*> batch_queries;
+        std::vector<size_t> batch_query_indices;
         for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
             if (++query_idx >= query_num) query_idx %= query_num;
-            pool.enqueue_task([&, query_idx, cur_offset] {
-                try {
-                    auto qs = std::chrono::high_resolution_clock::now();
-                    std::vector<TagT> query_result_tags;
-                    query_result_tags.reserve(recall_at);
-                    index->search_with_tags(
-                        query.get() + query_idx * query_aligned_dim, recall_at,
-                        Ls, query_result_tags);
-                    auto qe = std::chrono::high_resolution_clock::now();
-                    std::chrono::duration<double> diff = qe - qs;
-                    {
-                        std::unique_lock<std::mutex> lock(search_latency_mutex);
-                        search_latency_stats.push_back(
-                            (float)(diff.count() * 1000000));
-                    }
-                    {
-                        std::unique_lock<std::mutex> lock(result_mutex);
-                        search_results.emplace_back(cur_offset, query_idx,
-                                                    query_result_tags);
-                    }
-                } catch (...) {
-                    std::unique_lock<std::mutex> lock(last_except_mutex);
-                    last_exception = std::current_exception();
-                }
-            });
+            batch_queries.push_back(query.get() + query_idx * query_aligned_dim);
+            batch_query_indices.push_back(query_idx);
         }
+
+        auto search_qs = std::chrono::high_resolution_clock::now();
+        std::vector<std::vector<TagT>> batch_results;
+        batch_results.reserve(batch_queries.size());
+        index->batch_search(batch_queries, recall_at, Ls, batch_results);
+        
+        auto search_qe = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> search_diff = search_qe - search_qs;
+        {
+            std::unique_lock<std::mutex> lock(search_latency_mutex);
+            search_latency_stats.push_back((float)(search_diff.count() * 1000000));
+        }
+        {
+            std::unique_lock<std::mutex> lock(result_mutex);
+            for (size_t i = 0; i < batch_results.size(); ++i) {
+                search_results.emplace_back(cur_offset, batch_query_indices[i], batch_results[i]);
+            }
+        }
+
         start_search_offset = end_search_offset;
     }
 

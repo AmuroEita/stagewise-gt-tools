@@ -96,8 +96,8 @@ bool concurrent_bench(const std::string &data_path,
         end_insert_offset =
             std::min(start_insert_offset + batch_size, insert_total);
         size_t cur_insert_offset = begin_num + end_insert_offset;
-        std::cout << "Inserting with insert_offset = "
-                  << cur_insert_offset << std::endl;
+        std::cout << "Inserting with insert_offset = " << cur_insert_offset
+                  << std::endl;
 
         for (size_t idx = start_insert_offset; idx < end_insert_offset; ++idx) {
             batch_data.push_back(&data.get()[(idx + begin_num) * aligned_dim]);
@@ -106,10 +106,12 @@ bool concurrent_bench(const std::string &data_path,
 
         end_search_offset =
             std::min(start_search_offset + search_batch_size, search_total);
-        std::cout << "end_search_offset1 = " << start_search_offset + search_batch_size << std::endl;
+        std::cout << "end_search_offset1 = "
+                  << start_search_offset + search_batch_size << std::endl;
         std::cout << "end_search_offset2 = " << search_total << std::endl;
-   
-        std::cout << "Searching with search_offset = " << cur_insert_offset << std::endl;
+
+        std::cout << "Searching with search_offset = " << cur_insert_offset
+                  << std::endl;
 
         if (!query_new_data) {
             for (size_t idx = start_search_offset; idx < end_search_offset;
@@ -128,8 +130,10 @@ bool concurrent_bench(const std::string &data_path,
                  ++idx) {
                 size_t random_idx = dist(g);
                 batch_queries.push_back(
-                    &data.get()[(start_search_offset + random_idx) * aligned_dim]);
-                std::cout << "idx = " << start_search_offset + random_idx << std::endl;
+                    &data.get()[(start_search_offset + random_idx) *
+                                aligned_dim]);
+                std::cout << "idx = " << start_search_offset + random_idx
+                          << std::endl;
                 batch_query_tags.push_back(start_search_offset + random_idx);
             }
         }
@@ -165,8 +169,9 @@ bool concurrent_bench(const std::string &data_path,
                     std::cout << "batch_query_tags[i] = " << batch_query_tags[i]
                               << " batch_results[i] = " << batch_results[i][0]
                               << std::endl;
-                    search_results.emplace_back(
-                        cur_insert_offset, batch_query_tags[i], batch_results[i]);
+                    search_results.emplace_back(cur_insert_offset,
+                                                batch_query_tags[i],
+                                                batch_results[i]);
                 }
             });
 
@@ -194,8 +199,8 @@ bool concurrent_bench(const std::string &data_path,
                                         times.begin(), times.end());
 
             for (size_t i = 0; i < batch_results.size(); ++i) {
-                search_results.emplace_back(cur_insert_offset, batch_query_tags[i],
-                                            batch_results[i]);
+                search_results.emplace_back(
+                    cur_insert_offset, batch_query_tags[i], batch_results[i]);
             }
         }
 

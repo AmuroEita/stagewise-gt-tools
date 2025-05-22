@@ -196,17 +196,19 @@ struct Args {
 };
 
 void print_help() {
-    std::cout << "Usage: compute_gt [options]\n"
-              << "Options:\n"
-              << "  --base_path PATH     Path to base vectors file (required)\n"
-              << "  --query_path PATH    Path to query vectors file (required)\n"
-              << "  --batch_gt_path PATH Path to save batch groundtruth (optional)\n"
-              << "  --gt_path PATH       Path to save full groundtruth (optional)\n"
-              << "  --data_type TYPE     Data type (required)\n"
-              << "  --k K                Number of nearest neighbors (default: 20)\n"
-              << "  --inc INCREMENT      Increment size for batch processing (default: 10)\n"
-              << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
-              << "  --help               Show this help message\n";
+    std::cout
+        << "Usage: compute_gt [options]\n"
+        << "Options:\n"
+        << "  --base_path PATH     Path to base vectors file (required)\n"
+        << "  --query_path PATH    Path to query vectors file (required)\n"
+        << "  --batch_gt_path PATH Path to save batch groundtruth (optional)\n"
+        << "  --gt_path PATH       Path to save full groundtruth (optional)\n"
+        << "  --data_type TYPE     Data type (required)\n"
+        << "  --k K                Number of nearest neighbors (default: 20)\n"
+        << "  --inc INCREMENT      Increment size for batch processing "
+           "(default: 10)\n"
+        << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
+        << "  --help               Show this help message\n";
 }
 
 Args parse_args(int argc, char *argv[]) {
@@ -251,38 +253,45 @@ int main(int argc, char *argv[]) {
     if (!args.batch_gt_path.empty()) {
         std::ofstream out(args.batch_gt_path, std::ios::binary);
         if (!out.is_open()) {
-            throw std::runtime_error("Failed to open file: " + args.batch_gt_path);
+            throw std::runtime_error("Failed to open file: " +
+                                     args.batch_gt_path);
         }
 
         int n = static_cast<int>(queries.size());
-        int b = static_cast<int>((base.size() + args.increment - 1) / args.increment);
+        int b = static_cast<int>((base.size() + args.increment - 1) /
+                                 args.increment);
         out.write(reinterpret_cast<const char *>(&n), sizeof(int));
         out.write(reinterpret_cast<const char *>(&args.k), sizeof(int));
         out.write(reinterpret_cast<const char *>(&b), sizeof(int));
 
         size_t total_b = base.size();
-        for (size_t b_size = args.increment; b_size <= total_b; b_size += args.increment) {
+        for (size_t b_size = args.increment; b_size <= total_b;
+             b_size += args.increment) {
             int current_base_size = static_cast<int>(b_size);
-            out.write(reinterpret_cast<const char *>(&current_base_size), sizeof(int));
+            out.write(reinterpret_cast<const char *>(&current_base_size),
+                      sizeof(int));
 
-            for (size_t q_start = 0; q_start < queries.size(); q_start += args.chunk_size) {
-                size_t q_end = std::min(q_start + args.chunk_size, queries.size());
+            for (size_t q_start = 0; q_start < queries.size();
+                 q_start += args.chunk_size) {
+                size_t q_end =
+                    std::min(q_start + args.chunk_size, queries.size());
                 std::vector<std::vector<float>> chunk_queries(
-                    queries.begin() + q_start, 
-                    queries.begin() + q_end
-                );
+                    queries.begin() + q_start, queries.begin() + q_end);
 
-                auto chunk_gt = compute_batch_groundtruth(base, chunk_queries, b_size, args.k);
+                auto chunk_gt = compute_batch_groundtruth(base, chunk_queries,
+                                                          b_size, args.k);
 
-                for (const auto& result : chunk_gt) {
-                    for (const auto& [id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&id), sizeof(int));
-                        }
+                for (const auto &result : chunk_gt) {
+                    for (const auto &[id, dist] : result) {
+                        out.write(reinterpret_cast<const char *>(&id),
+                                  sizeof(int));
+                    }
                 }
 
-                for (const auto& result : chunk_gt) {
-                    for (const auto& [id, dist] : result) {
-                        out.write(reinterpret_cast<const char *>(&dist), sizeof(float));
+                for (const auto &result : chunk_gt) {
+                    for (const auto &[id, dist] : result) {
+                        out.write(reinterpret_cast<const char *>(&dist),
+                                  sizeof(float));
                     }
                 }
 

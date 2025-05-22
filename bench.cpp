@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 
-#include "algo_bench.hpp"
+#include "bench.hpp"
 #include "algorithms/hnsw.hpp"
 #include "utils.hpp"
 
@@ -30,9 +30,10 @@ void print_help() {
         << "  -n, --num_threads NUM     Number of threads\n"
         << "  -g, --gt_path PATH        Path to the ground truth file\n"
         << "  -o, --stat_path PATH      Path to save statistics\n"
-        << "  -N, --query_new_data      Query new data\n\n"
+        << "  -N, --query_new_data      Query new data\n"
+        << "  -a, --async               Enable asynchronous processing\n\n"
         << "Example:\n"
-        << "  ./cc-bench -d sift -t float -p data.bin -q query.bin -b results/ "
+        << "  ./bench -d sift -t float -p data.bin -q query.bin -b results/ "
            "-i 10000 "
         << "-w 0.5 -s 1000 -r 10 -R 16 -L 32 -l 100 -n 16 -g gt.bin -o "
            "stats.csv\n";
@@ -77,12 +78,14 @@ int main(int argc, char *argv[]) {
         {"gt_path", required_argument, 0, 'g'},
         {"stat_path", required_argument, 0, 'o'},
         {"query_new_data", no_argument, 0, 'N'},
+        {"async", no_argument, 0, 'a'},
         {0, 0, 0, 0}};
 
     int option_index = 0;
     int c;
     bool query_new_data = false;
-    while ((c = getopt_long(argc, argv, "d:t:p:q:b:i:m:w:s:r:R:L:l:D:n:g:o:Nh",
+    bool async = false;
+    while ((c = getopt_long(argc, argv, "d:t:p:q:b:i:m:w:s:r:R:L:l:D:n:g:o:Na",
                             long_options, &option_index)) != -1) {
         switch (c) {
             case 'd':
@@ -135,6 +138,9 @@ int main(int argc, char *argv[]) {
             case 'N':
                 query_new_data = true;
                 break;
+            case 'a':
+                async = true;
+                break;
             case 'h':
                 print_help();
                 return 0;
@@ -164,7 +170,7 @@ int main(int argc, char *argv[]) {
                 concurrent_bench<float, TagT, LabelT>(
                     data_path, query_path, begin_num, write_ratio, batch_size,
                     recall_at, Ls, num_threads, std::move(index),
-                    search_results, stat, query_new_data);
+                    search_results, stat, query_new_data, async);
             },
             true);
 

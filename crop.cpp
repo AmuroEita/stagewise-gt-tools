@@ -7,6 +7,8 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <unordered_set>
+#include <string>
 
 std::pair<std::vector<float>, int> read_fvecs(const char *filename, int n) {
     int fd = open(filename, O_RDONLY);
@@ -75,16 +77,53 @@ void write_fvecs(const char *filename, const std::vector<float> &data, int n,
     out.close();
 }
 
+std::unordered_set<int> read_hotspot_ids(const char* filename) {
+    std::unordered_set<int> ids;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open hotspots file: " << filename << std::endl;
+        exit(-1);
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        // 读取每行的第一个数字（query id）
+        int id = std::stoi(line.substr(0, line.find(' ')));
+        ids.insert(id);
+    }
+    return ids;
+}
+
+std::pair<std::vector<float>, int> extract_vectors_by_ids(
+    const std::vector<float>& all_data, 
+    const std::unordered_set<int>& ids,
+    int dim) {
+    
+    std::vector<float> selected_data;
+    selected_data.reserve(ids.size() * dim);
+
+    for (int id : ids) {
+        if (id >= 0 && id * dim < all_data.size()) {
+            selected_data.insert(selected_data.end(),
+                               all_data.begin() + id * dim,
+                               all_data.begin() + (id + 1) * dim);
+        }
+    }
+
+    return {selected_data, dim};
+}
+
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
+    if (argc != 5) {
         std::cout << "Usage: " << argv[0]
-                  << " <input.fvecs> <num_vectors> <output.fvecs>" << std::endl;
+                  << " <input.fvecs> <num_vectors> <hotspots.txt> <output.fvecs>" << std::endl;
         return 1;
     }
 
     const char *input_file = argv[1];
     int n = std::atoi(argv[2]);
-    const char *output_file = argv[3];
+    const char *hotspots_file = argv[3];
+    const char *output_file = argv[4];
 
     if (n <= 0) {
         std::cerr << "Number of vectors must be positive" << std::endl;
@@ -95,8 +134,15 @@ int main(int argc, char *argv[]) {
     std::cout << "Read " << n << " vectors with dimension " << dim << " from "
               << input_file << std::endl;
 
-    write_fvecs(output_file, data, n, dim);
-    std::cout << "Wrote " << n << " vectors to " << output_file << std::endl;
+    auto hotspot_ids = read_hotspot_ids(hotspots_file);
+    std::cout << "Read " << hotspot_ids.size() << " hotspot IDs from "
+              << hotspots_file << std::endl;
+
+    auto [selected_data, selected_dim] = extract_vectors_by_ids(data, hotspot_ids, dim);
+    std::cout << "Extracted " << selected_data.size() / dim << " vectors" << std::endl;
+
+    write_fvecs(output_file, selected_data, selected_data.size() / dim, dim);
+    std::cout << "Wrote " << selected_data.size() / dim << " vectors to " << output_file << std::endl;
 
     return 0;
 }

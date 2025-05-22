@@ -1,10 +1,11 @@
+#include "bench.hpp"
+
 #include <getopt.h>
 
 #include <cstring>
 #include <iostream>
 #include <string>
 
-#include "bench.hpp"
 #include "algorithms/hnsw.hpp"
 #include "utils.hpp"
 

@@ -2,9 +2,9 @@
 
 #include <omp.h>
 
+#include <chrono>
 #include <cstdint>
 #include <vector>
-#include <chrono>
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class IndexBase {
@@ -30,7 +30,8 @@ class IndexBase {
                 success_count++;
             }
             auto end = std::chrono::high_resolution_clock::now();
-            insert_times[i] = std::chrono::duration<double, std::micro>(end - start).count();
+            insert_times[i] =
+                std::chrono::duration<double, std::micro>(end - start).count();
         }
         return success_count == batch_data.size() ? 0 : -1;
     }
@@ -46,15 +47,12 @@ class IndexBase {
             auto start = std::chrono::high_resolution_clock::now();
             search_with_tags(batch_queries[i], k, Ls, batch_results[i]);
             auto end = std::chrono::high_resolution_clock::now();
-            search_times[i] = std::chrono::duration<double, std::micro>(end - start).count();
+            search_times[i] =
+                std::chrono::duration<double, std::micro>(end - start).count();
         }
     }
 
-    void get_insert_times(std::vector<double> &times) {
-        times = insert_times;
-    }
+    void get_insert_times(std::vector<double> &times) { times = insert_times; }
 
-    void get_search_times(std::vector<double> &times) {
-        times = search_times;
-    }
+    void get_search_times(std::vector<double> &times) { times = search_times; }
 };

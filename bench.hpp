@@ -35,7 +35,8 @@ bool concurrent_bench(const std::string &data_path,
                       bool async = false) {
     std::cout << "Starting concurrent benchmarking with #threads: "
               << num_threads << " #ratio: " << write_ratio << ":"
-              << 1 - write_ratio << " async: " << (async ? "true" : "false") << std::endl;
+              << 1 - write_ratio << " async: " << (async ? "true" : "false")
+              << std::endl;
 
     omp_set_num_threads(num_threads);
 
@@ -86,7 +87,6 @@ bool concurrent_bench(const std::string &data_path,
     auto st = std::chrono::high_resolution_clock::now();
     while (end_insert_offset < insert_total ||
            end_search_offset < search_total) {
-
         batch_data.clear();
         batch_tags.clear();
         batch_queries.clear();
@@ -104,10 +104,9 @@ bool concurrent_bench(const std::string &data_path,
         }
 
         end_search_offset =
-                std::min(start_search_offset + search_batch_size, search_total);
+            std::min(start_search_offset + search_batch_size, search_total);
         size_t cur_offset = begin_num + end_insert_offset;
-        std::cout << "Searching with search_offset=" << cur_offset
-                    << std::endl;
+        std::cout << "Searching with search_offset=" << cur_offset << std::endl;
 
         if (!query_new_data) {
             for (size_t idx = start_search_offset; idx < end_search_offset;
@@ -122,9 +121,11 @@ bool concurrent_bench(const std::string &data_path,
             std::mt19937 g(rd());
             std::uniform_int_distribution<size_t> dist(0, batch_size - 1);
 
-            for (size_t idx = start_search_offset; idx < end_search_offset; ++idx) {
+            for (size_t idx = start_search_offset; idx < end_search_offset;
+                 ++idx) {
                 size_t random_idx = dist(g);
-                batch_queries.push_back(&data.get()[(random_idx + begin_num) * aligned_dim]);
+                batch_queries.push_back(
+                    &data.get()[(random_idx + begin_num) * aligned_dim]);
                 batch_query_indices.push_back(random_idx + begin_num);
             }
         }
@@ -142,16 +143,19 @@ bool concurrent_bench(const std::string &data_path,
 
                 std::vector<double> times;
                 index->get_insert_times(times);
-                insert_latency_stats.insert(insert_latency_stats.end(), times.begin(), times.end());
+                insert_latency_stats.insert(insert_latency_stats.end(),
+                                            times.begin(), times.end());
                 return insert_result;
             });
 
             auto read_future = std::async(std::launch::async, [&]() {
-                index->batch_search(batch_queries, recall_at, Ls, batch_results);
-                
+                index->batch_search(batch_queries, recall_at, Ls,
+                                    batch_results);
+
                 std::vector<double> times;
                 index->get_search_times(times);
-                search_latency_stats.insert(search_latency_stats.end(), times.begin(), times.end());
+                search_latency_stats.insert(search_latency_stats.end(),
+                                            times.begin(), times.end());
 
                 for (size_t i = 0; i < batch_results.size(); ++i) {
                     search_results.emplace_back(
@@ -173,16 +177,18 @@ bool concurrent_bench(const std::string &data_path,
 
             std::vector<double> times;
             index->get_insert_times(times);
-            insert_latency_stats.insert(insert_latency_stats.end(), times.begin(), times.end());
+            insert_latency_stats.insert(insert_latency_stats.end(),
+                                        times.begin(), times.end());
 
             index->batch_search(batch_queries, recall_at, Ls, batch_results);
-            
+
             index->get_search_times(times);
-            search_latency_stats.insert(search_latency_stats.end(), times.begin(), times.end());
+            search_latency_stats.insert(search_latency_stats.end(),
+                                        times.begin(), times.end());
 
             for (size_t i = 0; i < batch_results.size(); ++i) {
-                search_results.emplace_back(
-                    cur_offset, batch_query_indices[i], batch_results[i]);
+                search_results.emplace_back(cur_offset, batch_query_indices[i],
+                                            batch_results[i]);
             }
         }
 
@@ -205,11 +211,13 @@ bool concurrent_bench(const std::string &data_path,
     double p95_insert_latency =
         insert_latency_stats.empty()
             ? 0.0
-            : (float)insert_latency_stats[(uint64_t)(0.95 * insert_latency_stats.size())];
+            : (float)insert_latency_stats[(
+                  uint64_t)(0.95 * insert_latency_stats.size())];
     double p99_insert_latency =
         insert_latency_stats.empty()
             ? 0.0
-            : (float)insert_latency_stats[(uint64_t)(0.999 * insert_latency_stats.size())];
+            : (float)insert_latency_stats[(
+                  uint64_t)(0.999 * insert_latency_stats.size())];
 
     std::sort(search_latency_stats.begin(), search_latency_stats.end());
     double mean_search_latency =
@@ -219,11 +227,13 @@ bool concurrent_bench(const std::string &data_path,
     double p95_search_latency =
         search_latency_stats.empty()
             ? 0.0
-            : (float)search_latency_stats[(uint64_t)(0.95 * search_latency_stats.size())];
+            : (float)search_latency_stats[(
+                  uint64_t)(0.95 * search_latency_stats.size())];
     double p99_search_latency =
         search_latency_stats.empty()
             ? 0.0
-            : (float)search_latency_stats[(uint64_t)(0.999 * search_latency_stats.size())];
+            : (float)search_latency_stats[(
+                  uint64_t)(0.999 * search_latency_stats.size())];
 
     stat.num_points = data_num;
     stat.insert_qps = insert_qps;

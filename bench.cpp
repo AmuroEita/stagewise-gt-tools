@@ -168,8 +168,12 @@ int main(int argc, char *argv[]) {
             },
             true);
 
-        overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls,
-                                            std::move(index), gt_path, stat);
+        if (query_new_data && recall_at == 1) {
+            stagewise_recall<float, TagT, LabelT>(search_results, stat);
+        } else {
+            overall_recall<float, TagT, LabelT>(query_path, recall_at, Ls,
+                                                std::move(index), gt_path, stat);
+        }
     } else if (data_type == "int8_t") {
     } else if (data_type == "uint8_t") {
     } else {

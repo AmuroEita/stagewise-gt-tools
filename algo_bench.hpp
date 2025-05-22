@@ -16,6 +16,8 @@
 #include <random>
 #include <thread>
 #include <vector>
+#include <map>
+#include <fstream>
 
 #include "algorithms/hnsw.hpp"
 #include "utils.hpp"
@@ -149,12 +151,12 @@ bool concurrent_bench(const std::string &data_path,
                 std::min(start_search_offset + search_batch_size, search_total);
             size_t cur_offset = begin_num + end_insert_offset;
             std::cout << "Searching with search_offset=" << cur_offset
-                      << std::endl;
+                    << std::endl;
 
             std::vector<T *> batch_queries;
             std::vector<size_t> batch_query_indices;
             for (size_t idx = start_search_offset; idx < end_search_offset;
-                 ++idx) {
+                ++idx) {
                 if (++query_idx >= query_num) query_idx %= query_num;
                 batch_queries.push_back(query.get() +
                                         query_idx * query_aligned_dim);
@@ -240,6 +242,39 @@ bool concurrent_bench(const std::string &data_path,
               << "  P95 latency: " << p95_search_latency << " us\n"
               << "  P99 latency: " << p99_search_latency << " us\n";
 
+    return true;
+}
+
+template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
+bool stagewise_recall(std::vector<SearchResult<TagT>> &search_results, Stat &stat) {
+    std::map<size_t, std::vector<SearchResult<TagT>>> batch_results;
+    
+    for (auto& result : search_results) {
+        batch_results[result.insert_offset].push_back(result);
+    }
+    
+    std::map<size_t, float> batch_recalls;
+    for (const auto& [batch_id, results] : batch_results) {
+        float batch_correct = 0;
+        for (const auto& result : results) {
+            if (result.query_idx == result.tags[0]) {
+                batch_correct++;
+            }
+        }
+        batch_recalls[batch_id] = batch_correct / results.size();
+    }
+    
+    std::ofstream outfile("batch_recalls.txt");
+    if (!outfile.is_open()) {
+        std::cerr << "Failed to open output file" << std::endl;
+        return false;
+    }
+    
+    for (const auto& [batch_id, recall] : batch_recalls) {
+        outfile << batch_id << " " << recall << std::endl;
+    }
+    outfile.close();
+    
     return true;
 }
 

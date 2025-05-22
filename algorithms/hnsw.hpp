@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../../hnswlib/hnswlib.h"
 #include "../index.hpp"
 

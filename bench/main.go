@@ -9,7 +9,7 @@ import (
 type TaskType int
 
 const (
-    InsertTask TaskType = iota
+    InsertTask TaskType =(pr * 0)
     SearchTask
 )
 
@@ -40,6 +40,7 @@ type Bench struct {
     index           Index
     stats           Stat
     mu              sync.Mutex
+    rwMu            sync.RWMutex // Added: read-write lock for index access
     wg              sync.WaitGroup
     insertCnt       int
     searchCnt       int
@@ -115,7 +116,9 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
                 start := time.Now()
                 switch task.Type {
                 case InsertTask:
+                    b.rwMu.Lock() // Exclusive write lock
                     err := b.index.BatchInsert(task.Data, task.Tags)
+                    b.rwMu.Unlock()
                     if err != nil {
                         fmt.Printf("Insert error: %v\n", err)
                         continue
@@ -124,7 +127,9 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
                     b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
                     b.mu.Unlock()
                 case SearchTask:
+                    b.rwMu.RLock() // Shared read lock
                     results, err := b.index.BatchSearch(task.Data, task.RecallAt, task.Ls)
+                    b.rwMu.RUnlock()
                     if err != nil {
                         fmt.Printf("Search error: %v\n", err)
                         continue

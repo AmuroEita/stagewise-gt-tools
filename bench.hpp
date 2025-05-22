@@ -75,13 +75,13 @@ bool concurrent_bench(const std::string &data_path,
     std::vector<T *> batch_data;
     std::vector<TagT> batch_tags;
     std::vector<T *> batch_queries;
-    std::vector<size_t> batch_query_indices;
+    std::vector<size_t> batch_query_tags;
     std::vector<std::vector<TagT>> batch_results;
 
     batch_data.reserve(batch_size);
     batch_tags.reserve(batch_size);
     batch_queries.reserve(search_batch_size);
-    batch_query_indices.reserve(search_batch_size);
+    batch_query_tags.reserve(search_batch_size);
     batch_results.reserve(search_batch_size);
 
     auto st = std::chrono::high_resolution_clock::now();
@@ -90,13 +90,14 @@ bool concurrent_bench(const std::string &data_path,
         batch_data.clear();
         batch_tags.clear();
         batch_queries.clear();
-        batch_query_indices.clear();
+        batch_query_tags.clear();
         batch_results.clear();
 
         end_insert_offset =
             std::min(start_insert_offset + batch_size, insert_total);
-        std::cout << "Inserting with insert_offset="
-                  << begin_num + end_insert_offset << std::endl;
+        size_t cur_insert_offset = begin_num + end_insert_offset;
+        std::cout << "Inserting with insert_offset = "
+                  << cur_insert_offset << std::endl;
 
         for (size_t idx = start_insert_offset; idx < end_insert_offset; ++idx) {
             batch_data.push_back(&data.get()[(idx + begin_num) * aligned_dim]);
@@ -105,8 +106,10 @@ bool concurrent_bench(const std::string &data_path,
 
         end_search_offset =
             std::min(start_search_offset + search_batch_size, search_total);
-        size_t cur_offset = begin_num + end_insert_offset;
-        std::cout << "Searching with search_offset=" << cur_offset << std::endl;
+        std::cout << "end_search_offset1 = " << start_search_offset + search_batch_size << std::endl;
+        std::cout << "end_search_offset2 = " << search_total << std::endl;
+   
+        std::cout << "Searching with search_offset = " << cur_insert_offset << std::endl;
 
         if (!query_new_data) {
             for (size_t idx = start_search_offset; idx < end_search_offset;
@@ -114,7 +117,7 @@ bool concurrent_bench(const std::string &data_path,
                 if (++query_idx >= query_num) query_idx %= query_num;
                 batch_queries.push_back(query.get() +
                                         query_idx * query_aligned_dim);
-                batch_query_indices.push_back(query_idx);
+                batch_query_tags.push_back(query_idx);
             }
         } else {
             std::random_device rd;
@@ -125,8 +128,9 @@ bool concurrent_bench(const std::string &data_path,
                  ++idx) {
                 size_t random_idx = dist(g);
                 batch_queries.push_back(
-                    &data.get()[(random_idx + begin_num) * aligned_dim]);
-                batch_query_indices.push_back(random_idx + begin_num);
+                    &data.get()[(start_search_offset + random_idx) * aligned_dim]);
+                std::cout << "idx = " << start_search_offset + random_idx << std::endl;
+                batch_query_tags.push_back(start_search_offset + random_idx);
             }
         }
 
@@ -158,8 +162,11 @@ bool concurrent_bench(const std::string &data_path,
                                             times.begin(), times.end());
 
                 for (size_t i = 0; i < batch_results.size(); ++i) {
+                    std::cout << "batch_query_tags[i] = " << batch_query_tags[i]
+                              << " batch_results[i] = " << batch_results[i][0]
+                              << std::endl;
                     search_results.emplace_back(
-                        cur_offset, batch_query_indices[i], batch_results[i]);
+                        cur_insert_offset, batch_query_tags[i], batch_results[i]);
                 }
             });
 
@@ -187,7 +194,7 @@ bool concurrent_bench(const std::string &data_path,
                                         times.begin(), times.end());
 
             for (size_t i = 0; i < batch_results.size(); ++i) {
-                search_results.emplace_back(cur_offset, batch_query_indices[i],
+                search_results.emplace_back(cur_insert_offset, batch_query_tags[i],
                                             batch_results[i]);
             }
         }
@@ -247,11 +254,13 @@ bool concurrent_bench(const std::string &data_path,
 
     std::cout << "Total time: " << elapsed_sec << " seconds\n"
               << "Insertion Statistics:\n"
+              << "  Insert Total: " << insert_total << " queries\n"
               << "  Overall throughput: " << insert_qps << " points/second\n"
               << "  Mean latency: " << mean_insert_latency << " us\n"
               << "  P95 latency: " << p95_insert_latency << " us\n"
               << "  P99 latency: " << p99_insert_latency << " us\n"
               << "Search Statistics:\n"
+              << "  Search Total: " << search_total << " queries\n"
               << "  Overall throughput: " << search_qps << " points/second\n"
               << "  Mean latency: " << mean_search_latency << " us\n"
               << "  P95 latency: " << p95_search_latency << " us\n"

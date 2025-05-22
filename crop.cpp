@@ -6,9 +6,9 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <vector>
-#include <unordered_set>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 std::pair<std::vector<float>, int> read_fvecs(const char *filename, int n) {
     int fd = open(filename, O_RDONLY);
@@ -77,7 +77,7 @@ void write_fvecs(const char *filename, const std::vector<float> &data, int n,
     out.close();
 }
 
-std::unordered_set<int> read_hotspot_ids(const char* filename) {
+std::unordered_set<int> read_hotspot_ids(const char *filename) {
     std::unordered_set<int> ids;
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -95,18 +95,16 @@ std::unordered_set<int> read_hotspot_ids(const char* filename) {
 }
 
 std::pair<std::vector<float>, int> extract_vectors_by_ids(
-    const std::vector<float>& all_data, 
-    const std::unordered_set<int>& ids,
+    const std::vector<float> &all_data, const std::unordered_set<int> &ids,
     int dim) {
-    
     std::vector<float> selected_data;
     selected_data.reserve(ids.size() * dim);
 
     for (int id : ids) {
         if (id >= 0 && id * dim < all_data.size()) {
             selected_data.insert(selected_data.end(),
-                               all_data.begin() + id * dim,
-                               all_data.begin() + (id + 1) * dim);
+                                 all_data.begin() + id * dim,
+                                 all_data.begin() + (id + 1) * dim);
         }
     }
 
@@ -115,8 +113,10 @@ std::pair<std::vector<float>, int> extract_vectors_by_ids(
 
 int main(int argc, char *argv[]) {
     if (argc != 5) {
-        std::cout << "Usage: " << argv[0]
-                  << " <input.fvecs> <num_vectors> <hotspots.txt> <output.fvecs>" << std::endl;
+        std::cout
+            << "Usage: " << argv[0]
+            << " <input.fvecs> <num_vectors> <hotspots.txt> <output.fvecs>"
+            << std::endl;
         return 1;
     }
 
@@ -138,11 +138,14 @@ int main(int argc, char *argv[]) {
     std::cout << "Read " << hotspot_ids.size() << " hotspot IDs from "
               << hotspots_file << std::endl;
 
-    auto [selected_data, selected_dim] = extract_vectors_by_ids(data, hotspot_ids, dim);
-    std::cout << "Extracted " << selected_data.size() / dim << " vectors" << std::endl;
+    auto [selected_data, selected_dim] =
+        extract_vectors_by_ids(data, hotspot_ids, dim);
+    std::cout << "Extracted " << selected_data.size() / dim << " vectors"
+              << std::endl;
 
     write_fvecs(output_file, selected_data, selected_data.size() / dim, dim);
-    std::cout << "Wrote " << selected_data.size() / dim << " vectors to " << output_file << std::endl;
+    std::cout << "Wrote " << selected_data.size() / dim << " vectors to "
+              << output_file << std::endl;
 
     return 0;
 }

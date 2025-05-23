@@ -78,6 +78,9 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 	searchTotal := int(float64(insertTotal) * (1 - writeRatio) / writeRatio)
 	searchBatchSize := int(float64(batchSize) * (1 - writeRatio) / writeRatio)
 
+	b.insertLatencies = make([]float64, insertTotal)
+	b.searchLatencies = make([]float64, searchTotal)
+
 	startInsertOffset := beginNum
 	startSearchOffset := 0
 	if config.Workload.QueryNewData {
@@ -172,9 +175,8 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 						fmt.Printf("Insert error: %v\n", err)
 						continue
 					}
-					b.mu.Lock()
-					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
-					b.mu.Unlock()
+					b.insertLatencies[b.insertCnt] = float64(time.Since(start).Microseconds())
+					b.insertCnt++
 				case SearchTask:
 					b.rwMu.RLock()
 					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls))
@@ -193,9 +195,8 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 						b.searchResults = append(b.searchResults, result)
 					}
 					b.resultsMu.Unlock()
-					b.mu.Lock()
-					b.searchLatencies = append(b.searchLatencies, float64(time.Since(start).Microseconds()))
-					b.mu.Unlock()
+					b.searchLatencies[b.searchCnt] = float64(time.Since(start).Microseconds())
+					b.searchCnt++
 				}
 			}
 		}()

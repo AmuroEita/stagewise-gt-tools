@@ -15,17 +15,17 @@ import (
 type TaskType int
 
 const (
-	InsertTask TaskType = (pr * 0)
+	InsertTask TaskType = iota
 	SearchTask
 )
 
 type Task struct {
 	Type      TaskType
-	Data      []float32
+	Data      [][]float32
 	Tags      []uint32
 	QueryIdx  uint32
-	RecallAt  uint
-	Ls        uint
+	RecallAt  uint32
+	Ls        uint32
 	Timestamp time.Time
 }
 
@@ -53,28 +53,38 @@ type Bench struct {
 	insertLatencies []float64
 	searchLatencies []float64
 	rateLimiter     *rate.Limiter
+	searchResults   []*internal.SearchResult
+	resultsMu       sync.Mutex
 }
 
-func ConcurrentBench(index Index, queueSize int, rateLimit float64) *Bench {
+func ConcurrentBench(index Index, config Config) *Bench {
 	return &Bench{
-		taskQueue:       make(chan Task, queueSize),
+		taskQueue:       make(chan Task, config.Workload.QueueSize),
 		index:           index,
 		insertLatencies: make([]float64, 0),
 		searchLatencies: make([]float64, 0),
-		rateLimiter:     rate.NewLimiter(rate.Limit(rateLimit), int(rateLimit)),
+		rateLimiter:     rate.NewLimiter(rate.Limit(config.Workload.InputRate), int(config.Workload.InputRate)),
 	}
 }
 
-func (b *Bench) ProduceTasks(data [][]float32, queries [][]float32, beginNum int, writeRatio float64, batchSize int, recallAt, Ls uint32) {
+func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
 	defer close(b.taskQueue)
 
-	insertTotal := len(data) - beginNum
+	beginNum := config.Data.BeginNum
+	writeRatio := config.Workload.WriteRatio
+	batchSize := config.Data.BatchSize
+
+	insertTotal := len(data)
 	searchTotal := int(float64(insertTotal) * (1 - writeRatio) / writeRatio)
 	searchBatchSize := int(float64(batchSize) * (1 - writeRatio) / writeRatio)
 
-	startInsertOffset := 0
+	startInsertOffset := beginNum
 	startSearchOffset := 0
-	queryIdx := uint32(0)
+	if (config.Workload.QueryNewData) {
+		startSearchOffset = beginNum
+	}
+	queryIdx := 0
+	totalQueries := len(queries)
 
 	for startInsertOffset < insertTotal || startSearchOffset < searchTotal {
 		endInsertOffset := min(startInsertOffset+batchSize, insertTotal)
@@ -82,11 +92,12 @@ func (b *Bench) ProduceTasks(data [][]float32, queries [][]float32, beginNum int
 			batchData := make([][]float32, 0, batchSize)
 			batchTags := make([]uint32, 0, batchSize)
 			for i := startInsertOffset; i < endInsertOffset; i++ {
-				batchData = append(batchData, data[beginNum+i])
+				start := i * dim
+				end := start + dim
+				batchData = append(batchData, data[start:end])
 				batchTags = append(batchTags, uint32(beginNum+i))
 			}
 
-			// 等待限流器允许
 			if err := b.rateLimiter.Wait(context.Background()); err != nil {
 				fmt.Printf("Rate limit error: %v\n", err)
 				continue
@@ -106,11 +117,12 @@ func (b *Bench) ProduceTasks(data [][]float32, queries [][]float32, beginNum int
 		if startSearchOffset < endSearchOffset {
 			batchQueries := make([][]float32, 0, searchBatchSize)
 			for i := startSearchOffset; i < endSearchOffset; i++ {
-				queryIdx = (queryIdx + 1) % uint32(len(queries))
-				batchQueries = append(batchQueries, queries[queryIdx])
+				queryIdx = (queryIdx + 1) % totalQueries
+				start := queryIdx * dim
+				end := start + dim
+				batchQueries = append(batchQueries, queries[start:end])
 			}
 
-			// 等待限流器允许
 			if err := b.rateLimiter.Wait(context.Background()); err != nil {
 				fmt.Printf("Rate limit error: %v\n", err)
 				continue
@@ -119,8 +131,8 @@ func (b *Bench) ProduceTasks(data [][]float32, queries [][]float32, beginNum int
 			b.taskQueue <- Task{
 				Type:      SearchTask,
 				Data:      batchQueries,
-				RecallAt:  recallAt,
-				Ls:        Ls,
+				RecallAt:  config.Search.RecallAt,
+				Ls:        config.Search.Ls,
 				Timestamp: time.Now(),
 			}
 			startSearchOffset = endSearchOffset
@@ -138,7 +150,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 				start := time.Now()
 				switch task.Type {
 				case InsertTask:
-					b.rwMu.Lock() // Exclusive write lock
+					b.rwMu.Lock() 
 					err := b.index.BatchInsert(task.Data, task.Tags)
 					b.rwMu.Unlock()
 					if err != nil {
@@ -149,13 +161,23 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
 					b.mu.Unlock()
 				case SearchTask:
-					b.rwMu.RLock() // Shared read lock
-					results, err := b.index.BatchSearch(task.Data, task.RecallAt, task.Ls)
+					b.rwMu.RLock() 
+					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls))
 					b.rwMu.RUnlock()
 					if err != nil {
 						fmt.Printf("Search error: %v\n", err)
 						continue
 					}
+					b.resultsMu.Lock()
+					for i, tags := range results {
+						result := internal.NewSearchResult(
+							uint64(b.insertCnt),
+							uint64(i),
+							tags,
+						)
+						b.searchResults = append(b.searchResults, result)
+					}
+					b.resultsMu.Unlock()
 					b.mu.Lock()
 					b.searchLatencies = append(b.searchLatencies, float64(time.Since(start).Microseconds()))
 					b.mu.Unlock()
@@ -203,7 +225,7 @@ func mean(values []float64) float64 {
 type Config struct {
 	Data struct {
 		DatasetName string `yaml:"dataset_name"`
-		MaxElements int    `yaml:"max_elements"`
+		MaxElements uint64 `yaml:"max_elements"`
 		BeginNum    int    `yaml:"begin_num"`
 		BatchSize   int    `yaml:"batch_size"`
 		MaxQueries  int    `yaml:"max_queries"`
@@ -219,8 +241,8 @@ type Config struct {
 	} `yaml:"index"`
 
 	Search struct {
-		RecallAt uint `yaml:"recall_at"`
-		Ls       uint `yaml:"ls"`
+		RecallAt uint32 `yaml:"recall_at"`
+		Ls       uint32 `yaml:"ls"`
 	} `yaml:"search"`
 
 	Workload struct {
@@ -261,40 +283,62 @@ func main() {
 		return
 	}
 
-	var dataNum, dataDim uint64
+	var dataNum uint64
+	var dataDim int
 	internal.GetBinMetadata(config.Data.DataPath, &dataNum, &dataDim)
 
-	beginNum := config.Data.BeginNum
-	writeRatio := config.Workload.WriteRatio
-	batchSize := config.Data.BatchSize
-	recallAt := config.Search.RecallAt
-	Ls := config.Search.Ls
-	numThreads := config.Workload.NumThreads
+	data, _, _, _, err := internal.LoadAlignedBin(config.Data.DataPath)
+	if err != nil {
+		fmt.Printf("Failed to load data: %v\n", err)
+		return
+	}
 
-	searchResults := internal.PreAllocateSearchResults(dataNum, writeRatio)
+	queries, _, _, _, err := internal.LoadAlignedBin(config.Data.QueryPath)
+	if err != nil {
+		fmt.Printf("Failed to load queries: %v\n", err)
+		return
+	}
 
 	var index Index
 	switch config.Index.IndexType {
 	case "hnsw":
 		params := internal.IndexParams{
 			Dim:         dataDim,
-			MaxElements: uint64(config.Data.MaxElements),
-			M:           uint64(config.Index.M),
-			Lb:          uint64(config.Index.Lb),
+			MaxElements: config.Data.MaxElements,
+			M:           config.Index.M,
+			Lb:          config.Index.Lb,
+			DataType:    internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeHNSW, params)
 	default:
 		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
 		return
 	}
+    
+	beginNum := config.Data.BeginNum
+	if beginNum != 0 {
+		preData := make([][]float32, 0, beginNum)
+		preTags := make([]uint32, 0, beginNum)
+		for i := 0; i < beginNum; i++ {
+			start := i * dataDim
+			end := start + dataDim
+			preData = append(preData, data[start:end])
+			preTags = append(preTags, uint32(i))
+		}
+		if err := index.BatchInsert(preData, preTags); err != nil {
+			fmt.Printf("Warn start error: %v\n", err)
+			return
+		}
+	}
 
 	var bench *Bench
-	bench = ConcurrentBench(index, config.Workload.QueueSize, config.Workload.InputRate)
+	bench = ConcurrentBench(index, *config)
+	bench.searchResults = make([]*internal.SearchResult, 0, config.Data.MaxElements)
 
 	start := time.Now()
 
-	go bench.ProduceTasks(data, queries, beginNum, writeRatio, batchSize, recallAt, Ls)
-	bench.ConsumeTasks(numThreads)
+	go bench.ProduceTasks(data, queries, dataDim, config)
+	bench.ConsumeTasks(config.Workload.NumThreads)
 
 	bench.wg.Wait()
 	elapsedSec := time.Since(start).Seconds()

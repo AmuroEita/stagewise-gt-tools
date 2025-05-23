@@ -13,11 +13,6 @@ type SearchResult struct {
 	Distances    []float32
 }
 
-func PreAllocateSearchResults(dataNum uint64, writeRatio float64) []*SearchResult {
-	capacity := int(float64(dataNum) * (1.0/writeRatio - 1.0))
-	return make([]*SearchResult, 0, capacity)
-}
-
 func NewSearchResult(offset, idx uint64, tags []uint32) *SearchResult {
 	return &SearchResult{
 		InsertOffset: offset,
@@ -36,7 +31,7 @@ func NewSearchResultWithDistances(offset, idx uint64, tags []uint32, distances [
 	}
 }
 
-func GetBinMetadata(filename string, numPoints *uint64, dimensions *uint64) error {
+func GetBinMetadata(filename string, numPoints *uint64, dim *int) error {
 	file, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %v", err)
@@ -49,10 +44,10 @@ func GetBinMetadata(filename string, numPoints *uint64, dimensions *uint64) erro
 	}
 
 	*numPoints = uint64(metadata[0])
-	*dimensions = uint64(metadata[1])
+	*dim = int(metadata[1])
 
 	fmt.Printf("File %s contains %d points and %d dimensions\n",
-		filename, *numPoints, *dimensions)
+		filename, *numPoints, *dim)
 
 	return nil
 }

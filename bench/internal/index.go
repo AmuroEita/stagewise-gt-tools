@@ -19,11 +19,20 @@ const (
 	IndexTypeCCHNSW
 )
 
+type DataType int
+
+const (
+	DataTypeFloat DataType = iota
+	DataTypeInt8
+	DataTypeUint8
+)
+
 type IndexParams struct {
-	Dim         uint64
+	Dim         int
 	MaxElements uint64
-	M           uint64
-	Lb          uint64
+	M           int
+	Lb          int
+	DataType    DataType
 }
 
 type Index struct {

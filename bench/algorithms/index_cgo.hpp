@@ -14,11 +14,18 @@ typedef enum {
     INDEX_TYPE_CCHNSW = 3,
 } IndexType;
 
+typedef enum {
+    DATA_TYPE_FLOAT = 0,
+    DATA_TYPE_INT8 = 1,
+    DATA_TYPE_UINT8 = 2,
+} DataType;
+
 typedef struct {
     size_t dim;
     size_t max_elements;
     size_t M;
     size_t Lb;
+    DataType data_type;
 } IndexParams;
 
 void* create_index(IndexType type, IndexParams params);

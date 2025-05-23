@@ -1,4 +1,4 @@
-module github.com/your-username/ANN-CC-bench/bench
+module ANN-CC-bench/bench
 
 go 1.24.2
 

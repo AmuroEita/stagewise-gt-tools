@@ -2,14 +2,13 @@
 #include "hnsw/hnsw.hpp"
 #include <vector>
 
-#include "hnsw.hpp"
-
 extern "C" {
 
-void* create_index(IndexType type) {
+void* create_index(IndexType type, IndexParams params) {
     switch (type) {
         case INDEX_TYPE_HNSW:
-            return new HNSW<float>();
+            return new HNSW<float>(params.dim, params.max_elements, params.M,
+                                   params.Lb);
         default:
             return nullptr;
     }

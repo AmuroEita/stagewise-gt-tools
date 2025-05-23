@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ANN-CC-bench/bench/internal"
 	"context"
 	"fmt"
 	"os"
@@ -23,8 +24,8 @@ type Task struct {
 	Data      []float32
 	Tags      []uint32
 	QueryIdx  uint32
-	RecallAt  uint32
-	Ls        uint32
+	RecallAt  uint
+	Ls        uint
 	Timestamp time.Time
 }
 
@@ -37,7 +38,7 @@ type Stat struct {
 
 type Index interface {
 	BatchInsert(data [][]float32, tags []uint32) error
-	BatchSearch(queries [][]float32, recallAt, Ls uint32) ([][]uint32, error)
+	BatchSearch(queries [][]float32, recallAt, Ls uint) ([][]uint32, error)
 }
 
 type Bench struct {
@@ -218,8 +219,8 @@ type Config struct {
 	} `yaml:"index"`
 
 	Search struct {
-		RecallAt uint32 `yaml:"recall_at"`
-		Ls       uint32 `yaml:"ls"`
+		RecallAt uint `yaml:"recall_at"`
+		Ls       uint `yaml:"ls"`
 	} `yaml:"search"`
 
 	Workload struct {
@@ -261,7 +262,7 @@ func main() {
 	}
 
 	var dataNum, dataDim uint64
-	GetBinMetadata(config.Data.DataPath, &dataNum, &dataDim)
+	internal.GetBinMetadata(config.Data.DataPath, &dataNum, &dataDim)
 
 	beginNum := config.Data.BeginNum
 	writeRatio := config.Workload.WriteRatio
@@ -270,12 +271,18 @@ func main() {
 	Ls := config.Search.Ls
 	numThreads := config.Workload.NumThreads
 
-	searchResults := PreAllocateSearchResults(dataNum, writeRatio)
+	searchResults := internal.PreAllocateSearchResults(dataNum, writeRatio)
 
 	var index Index
 	switch config.Index.IndexType {
 	case "hnsw":
-		index = NewIndex(0)
+		params := internal.IndexParams{
+			Dim:         dataDim,
+			MaxElements: uint64(config.Data.MaxElements),
+			M:           uint64(config.Index.M),
+			Lb:          uint64(config.Index.Lb),
+		}
+		index = internal.NewIndex(internal.IndexTypeHNSW, params)
 	default:
 		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
 		return

@@ -1,8 +1,9 @@
-package bench
+package internal
 
-// #cgo CXXFLAGS: -I${SRCDIR}
-// #cgo LDFLAGS: -L${SRCDIR} -lindex
-// #include "index_cgo.hpp"
+// #cgo CXXFLAGS: -I${SRCDIR}/../algorithms
+// #cgo LDFLAGS: -L${SRCDIR}/../algorithms -lindex
+// #cgo CXXFLAGS: -std=c++14
+// #include "../algorithms/index_cgo.hpp"
 import "C"
 import (
 	"fmt"
@@ -18,9 +19,26 @@ const (
 	IndexTypeCCHNSW
 )
 
-func NewIndex(indexType IndexType) *Index {
+type IndexParams struct {
+	Dim         uint64
+	MaxElements uint64
+	M           uint64
+	Lb          uint64
+}
+
+type Index struct {
+	ptr unsafe.Pointer
+}
+
+func NewIndex(indexType IndexType, params IndexParams) *Index {
+	cParams := C.IndexParams{
+		dim:          C.size_t(params.Dim),
+		max_elements: C.size_t(params.MaxElements),
+		M:            C.size_t(params.M),
+		Lb:           C.size_t(params.Lb),
+	}
 	return &Index{
-		ptr: C.create_index(C.IndexType(indexType)),
+		ptr: C.create_index(C.IndexType(indexType), cParams),
 	}
 }
 

@@ -1,10 +1,11 @@
 #pragma once
 
 #include <omp.h>
+#include <stdint.h>
+#include <vector>
 
 #include <chrono>
 #include <cstdint>
-#include <vector>
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class IndexBase {

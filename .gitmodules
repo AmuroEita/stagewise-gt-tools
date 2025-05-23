@@ -1,0 +1,3 @@
+[submodule "bench/algorithms/hnsw/hnswlib"]
+	path = bench/algorithms/hnsw/hnswlib
+	url = https://github.com/nmslib/hnswlib.git

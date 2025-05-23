@@ -80,7 +80,7 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 
 	startInsertOffset := beginNum
 	startSearchOffset := 0
-	if (config.Workload.QueryNewData) {
+	if config.Workload.QueryNewData {
 		startSearchOffset = beginNum
 	}
 	queryIdx := 0
@@ -150,7 +150,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 				start := time.Now()
 				switch task.Type {
 				case InsertTask:
-					b.rwMu.Lock() 
+					b.rwMu.Lock()
 					err := b.index.BatchInsert(task.Data, task.Tags)
 					b.rwMu.Unlock()
 					if err != nil {
@@ -161,7 +161,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
 					b.mu.Unlock()
 				case SearchTask:
-					b.rwMu.RLock() 
+					b.rwMu.RLock()
 					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls))
 					b.rwMu.RUnlock()
 					if err != nil {
@@ -314,7 +314,7 @@ func main() {
 		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
 		return
 	}
-    
+
 	beginNum := config.Data.BeginNum
 	if beginNum != 0 {
 		preData := make([][]float32, 0, beginNum)

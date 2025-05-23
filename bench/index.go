@@ -13,6 +13,9 @@ type IndexType int
 
 const (
 	IndexTypeHNSW IndexType = iota
+	IndexTypeVAMANA
+	IndexTypePARLAYANN
+	IndexTypeCCHNSW
 )
 
 func NewIndex(indexType IndexType) *Index {

@@ -272,10 +272,17 @@ func main() {
 
 	searchResults := PreAllocateSearchResults(dataNum, writeRatio)
 
-	index := NewIndex(0)
-
 	var index Index
-	bench := ConcurrentBench(index, config.Workload.QueueSize, config.Workload.InputRate)
+	switch config.Index.IndexType {
+	case "hnsw":
+		index = NewIndex(0)
+	default:
+		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
+		return
+	}
+
+	var bench *Bench
+	bench = ConcurrentBench(index, config.Workload.QueueSize, config.Workload.InputRate)
 
 	start := time.Now()
 

@@ -1,11 +1,16 @@
 #include "index_cgo.hpp"
-#include "hnsw.hpp"
+#include "hnsw/hnsw.hpp"
 #include <vector>
 
 extern "C" {
 
-void* create_index() {
-    return new HNSW<float>();
+void* create_index(IndexType type) {
+    switch (type) {
+        case INDEX_TYPE_HNSW:
+            return new HNSW<float>();
+        default:
+            return nullptr;
+    }
 }
 
 void destroy_index(void* index) {

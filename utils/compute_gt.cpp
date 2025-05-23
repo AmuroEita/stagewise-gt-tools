@@ -177,6 +177,7 @@ void compute_and_save_full_groundtruth(
                  npts * ndims * sizeof(int32_t));
     writer.write(reinterpret_cast<char *>(distances.data()),
                  npts * ndims * sizeof(float));
+    writer.flush();
     writer.close();
 
     std::cout << "Finished writing full groundtruth to " << filename
@@ -242,20 +243,23 @@ Args parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     Args args = parse_args(argc, argv);
 
-    // print help message
-
+    std::cout << "Starting computation..." << std::endl;
+    std::cout << "Reading base vectors from: " << args.base_path << std::endl;
     std::vector<std::vector<float>> base = read_fvecs(args.base_path);
+    std::cout << "Reading query vectors from: " << args.query_path << std::endl;
     std::vector<std::vector<float>> queries = read_fvecs(args.query_path);
 
     std::cout << "Computing groundtruth for " << args.k << " nearest neighbors"
               << std::endl;
 
     if (!args.batch_gt_path.empty()) {
+        std::cout << "Attempting to open batch groundtruth file: " << args.batch_gt_path << std::endl;
         std::ofstream out(args.batch_gt_path, std::ios::binary);
         if (!out.is_open()) {
-            throw std::runtime_error("Failed to open file: " +
-                                     args.batch_gt_path);
+            std::cerr << "Error: Failed to open file: " << args.batch_gt_path << std::endl;
+            throw std::runtime_error("Failed to open file: " + args.batch_gt_path);
         }
+        std::cout << "Successfully opened file for writing" << std::endl;
 
         int n = static_cast<int>(queries.size());
         int b = static_cast<int>((base.size() + args.increment - 1) /
@@ -294,15 +298,12 @@ int main(int argc, char *argv[]) {
                                   sizeof(float));
                     }
                 }
+                out.flush();
 
                 chunk_gt.clear();
                 chunk_gt.shrink_to_fit();
                 chunk_queries.clear();
                 chunk_queries.shrink_to_fit();
-
-                if (q_end % args.chunk_size == 0) {
-                    out.flush();
-                }
             }
         }
     }

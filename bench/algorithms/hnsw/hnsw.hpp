@@ -1,7 +1,7 @@
 #pragma once
 
-#include "hnswlib/hnswlib.h"
 #include "../index.hpp"
+#include "hnswlib/hnswlib.h"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {

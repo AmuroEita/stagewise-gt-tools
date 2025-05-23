@@ -1,8 +1,9 @@
 #include "index_cgo.hpp"
-#include "hnsw/hnsw.hpp"
+
 #include <vector>
 
 #include "hnsw.hpp"
+#include "hnsw/hnsw.hpp"
 
 extern "C" {
 

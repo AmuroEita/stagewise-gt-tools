@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,20 +45,22 @@ type Bench struct {
 	index           Index
 	stats           Stat
 	mu              sync.Mutex
-	rwMu            sync.RWMutex // Added: read-write lock for index access
+	rwMu            sync.RWMutex
 	wg              sync.WaitGroup
 	insertCnt       int
 	searchCnt       int
 	insertLatencies []float64
 	searchLatencies []float64
+	rateLimiter     *rate.Limiter
 }
 
-func ConcurrentBench(index Index, queueSize int) *Bench {
+func ConcurrentBench(index Index, queueSize int, rateLimit float64) *Bench {
 	return &Bench{
 		taskQueue:       make(chan Task, queueSize),
 		index:           index,
 		insertLatencies: make([]float64, 0),
 		searchLatencies: make([]float64, 0),
+		rateLimiter:     rate.NewLimiter(rate.Limit(rateLimit), int(rateLimit)),
 	}
 }
 
@@ -80,6 +84,13 @@ func (b *Bench) ProduceTasks(data [][]float32, queries [][]float32, beginNum int
 				batchData = append(batchData, data[beginNum+i])
 				batchTags = append(batchTags, uint32(beginNum+i))
 			}
+
+			// 等待限流器允许
+			if err := b.rateLimiter.Wait(context.Background()); err != nil {
+				fmt.Printf("Rate limit error: %v\n", err)
+				continue
+			}
+
 			b.taskQueue <- Task{
 				Type:      InsertTask,
 				Data:      batchData,
@@ -97,6 +108,13 @@ func (b *Bench) ProduceTasks(data [][]float32, queries [][]float32, beginNum int
 				queryIdx = (queryIdx + 1) % uint32(len(queries))
 				batchQueries = append(batchQueries, queries[queryIdx])
 			}
+
+			// 等待限流器允许
+			if err := b.rateLimiter.Wait(context.Background()); err != nil {
+				fmt.Printf("Rate limit error: %v\n", err)
+				continue
+			}
+
 			b.taskQueue <- Task{
 				Type:      SearchTask,
 				Data:      batchQueries,
@@ -183,17 +201,21 @@ func mean(values []float64) float64 {
 
 type Config struct {
 	Data struct {
-		DatasetName  string `yaml:"dataset_name"`
-		DataType     string `yaml:"data_type"`
-		Size         int    `yaml:"size"`
-		BeginNum     int    `yaml:"begin_num"`
-		BatchSize    int    `yaml:"batch_size"`
-		QueryNewData bool   `yaml:"query_new_data"`
+		DatasetName string `yaml:"dataset_name"`
+		MaxElements int    `yaml:"max_elements"`
+		BeginNum    int    `yaml:"begin_num"`
+		BatchSize   int    `yaml:"batch_size"`
+		MaxQueries  int    `yaml:"max_queries"`
+		DataType    string `yaml:"data_type"`
+		DataPath    string `yaml:"data_path"`
+		QueryPath   string `yaml:"query_path"`
 	} `yaml:"data"`
 
-	Queries struct {
-		Size int `yaml:"size"`
-	} `yaml:"queries"`
+	Index struct {
+		IndexType string `yaml:"index_type"`
+		M         int    `yaml:"m"`
+		Lb        int    `yaml:"lb"`
+	} `yaml:"index"`
 
 	Search struct {
 		RecallAt uint32 `yaml:"recall_at"`
@@ -205,7 +227,15 @@ type Config struct {
 		NumThreads   int     `yaml:"num_threads"`
 		QueueSize    int     `yaml:"queue_size"`
 		QueryNewData bool    `yaml:"query_new_data"`
+		InputRate    float64 `yaml:"input_rate"`
+		Async        bool    `yaml:"async"`
 	} `yaml:"workload"`
+
+	Result struct {
+		OutputDir    string `yaml:"output_dir"`
+		GtPath       string `yaml:"gt_path"`
+		BatchResPath string `yaml:"batch_res_path"`
+	} `yaml:"result"`
 }
 
 func loadConfig(filename string) (*Config, error) {
@@ -230,17 +260,22 @@ func main() {
 		return
 	}
 
-	var index Index
-	bench := ConcurrentBench(index, config.Workload.QueueSize)
+	var dataNum, dataDim uint64
+	GetBinMetadata(config.Data.DataPath, &dataNum, &dataDim)
 
-	data := make([][]float32, config.Data.Size)
-	queries := make([][]float32, config.Queries.Size)
 	beginNum := config.Data.BeginNum
 	writeRatio := config.Workload.WriteRatio
 	batchSize := config.Data.BatchSize
 	recallAt := config.Search.RecallAt
 	Ls := config.Search.Ls
 	numThreads := config.Workload.NumThreads
+
+	searchResults := PreAllocateSearchResults(dataNum, writeRatio)
+
+	index := NewIndex(0)
+
+	var index Index
+	bench := ConcurrentBench(index, config.Workload.QueueSize, config.Workload.InputRate)
 
 	start := time.Now()
 

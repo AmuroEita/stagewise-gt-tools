@@ -1,10 +1,17 @@
 data:
-  size: 10000
+  dataset_name: sift
+  max_elements: 1000000
   begin_num: 5000
   batch_size: 100
+  max_queries: 10000
+  data_type: float
+  data_path: ../data/sift/sift.fvecs
+  query_path: ../data/sift/sift.fvecs
 
-queries:
-  size: 1000
+index:
+  index_type: hnsw
+  m: 32
+  lb: 200
 
 search:
   recall_at: 10
@@ -13,4 +20,12 @@ search:
 workload:
   write_ratio: 0.5
   num_threads: 16
-  queue_size: 1000 
+  queue_size: 1000
+  query_new_data: false
+  input_rate: 2000
+  async: true
+
+result:
+  output_dir: ./result
+  gt_path: ./result/gt.txt
+  batch_res_path: ./result/batch_res.txt

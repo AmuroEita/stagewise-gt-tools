@@ -1,8 +1,6 @@
-#include "index_cgo.hpp"
-
 #include <vector>
 
-#include "hnsw.hpp"
+#include "index_cgo.hpp"
 #include "hnsw/hnsw.hpp"
 
 extern "C" {
@@ -10,19 +8,11 @@ extern "C" {
 void* create_index(IndexType type, IndexParams params) {
     switch (type) {
         case INDEX_TYPE_HNSW:
-            switch (params.data_type) {
-                case DATA_TYPE_FLOAT:
-                    return new HNSW<float>(params.dim, params.max_elements,
-                                           params.M, params.Lb);
-                case DATA_TYPE_INT8:
-                    return new HNSW<int8_t>(params.dim, params.max_elements,
-                                            params.M, params.Lb);
-                case DATA_TYPE_UINT8:
-                    return new HNSW<uint8_t>(params.dim, params.max_elements,
-                                             params.M, params.Lb);
-                default:
-                    return nullptr;
+            if (params.data_type == DATA_TYPE_FLOAT) {
+                return new HNSW<float>(params.dim, params.max_elements,
+                                     params.M, params.Lb);
             }
+            return nullptr;
         default:
             return nullptr;
     }

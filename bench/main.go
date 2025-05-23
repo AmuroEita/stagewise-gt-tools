@@ -114,30 +114,45 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 		}
 
 		endSearchOffset := min(startSearchOffset+searchBatchSize, searchTotal)
-		if startSearchOffset < endSearchOffset {
-			batchQueries := make([][]float32, 0, searchBatchSize)
+		batchQueries := make([][]float32, 0, searchBatchSize)
+		batchTags := make([]uint32, 0, searchBatchSize)
+
+		if config.Workload.QueryNewData {
+			for i := startSearchOffset; i < endSearchOffset; i++ {
+				randomIdx := startInsertOffset - (i - startSearchOffset + 1)
+				if randomIdx < 0 {
+					randomIdx = 0
+				}
+				start := randomIdx * dim
+				end := start + dim
+				batchQueries = append(batchQueries, data[start:end])
+				batchTags = append(batchTags, uint32(beginNum+randomIdx))
+			}
+		} else {
 			for i := startSearchOffset; i < endSearchOffset; i++ {
 				queryIdx = (queryIdx + 1) % totalQueries
 				start := queryIdx * dim
 				end := start + dim
 				batchQueries = append(batchQueries, queries[start:end])
+				batchTags = append(batchTags, uint32(queryIdx))
 			}
-
-			if err := b.rateLimiter.Wait(context.Background()); err != nil {
-				fmt.Printf("Rate limit error: %v\n", err)
-				continue
-			}
-
-			b.taskQueue <- Task{
-				Type:      SearchTask,
-				Data:      batchQueries,
-				RecallAt:  config.Search.RecallAt,
-				Ls:        config.Search.Ls,
-				Timestamp: time.Now(),
-			}
-			startSearchOffset = endSearchOffset
-			b.searchCnt += len(batchQueries)
 		}
+
+		if err := b.rateLimiter.Wait(context.Background()); err != nil {
+			fmt.Printf("Rate limit error: %v\n", err)
+			continue
+		}
+
+		b.taskQueue <- Task{
+			Type:      SearchTask,
+			Data:      batchQueries,
+			Tags:      batchTags,
+			RecallAt:  config.Search.RecallAt,
+			Ls:        config.Search.Ls,
+			Timestamp: time.Now(),
+		}
+		startSearchOffset = endSearchOffset
+		b.searchCnt += len(batchQueries)
 	}
 }
 

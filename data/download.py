@@ -15,7 +15,7 @@ urls = [
     "ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz"
 ]
 
-download_dir = "downloads"
+download_dir = "."
 os.makedirs(download_dir, exist_ok=True)
 
 for url in urls:

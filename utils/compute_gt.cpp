@@ -43,6 +43,49 @@ float euclidean_distance_simd(const std::vector<float> &a,
     return sum;
 }
 
+class IncrementalKNN {
+private:
+    std::priority_queue<PointPair, std::vector<PointPair>, std::less<PointPair>> max_heap;
+    size_t current_size;
+    int k;
+
+public:
+    IncrementalKNN(int k) : current_size(0), k(k) {}
+
+    void add_new_vectors(const std::vector<std::vector<float>>& new_vectors,
+                        const std::vector<float>& query) {
+        for(const auto& vec : new_vectors) {
+            float dist = euclidean_distance_simd(query, vec);
+            if(max_heap.size() < static_cast<size_t>(k)) {
+                max_heap.emplace(dist, static_cast<int>(current_size++));
+            } else if(dist < max_heap.top().first) {
+                max_heap.pop();
+                max_heap.emplace(dist, static_cast<int>(current_size++));
+            } else {
+                current_size++;
+            }
+        }
+    }
+
+    std::vector<PointPair> get_topk() {
+        std::vector<PointPair> topk;
+        topk.reserve(k);
+        while (!max_heap.empty()) {
+            topk.emplace_back(max_heap.top().second, max_heap.top().first);
+            max_heap.pop();
+        }
+        std::reverse(topk.begin(), topk.end());
+        return topk;
+    }
+
+    void reset() {
+        while (!max_heap.empty()) {
+            max_heap.pop();
+        }
+        current_size = 0;
+    }
+};
+
 std::vector<PointPair> exact_knn(const std::vector<float> &query,
                                  const std::vector<std::vector<float>> &base,
                                  size_t b_size, int k) {
@@ -85,8 +128,11 @@ std::vector<std::vector<PointPair>> compute_batch_groundtruth(
     size_t chunk_size = (queries.size() + num_threads - 1) / num_threads;
 
     auto worker = [&](size_t start, size_t end) {
+        IncrementalKNN knn(k);
         for (size_t i = start; i < end && i < queries.size(); ++i) {
-            results[i] = exact_knn(queries[i], base, b_size, k);
+            knn.reset();
+            knn.add_new_vectors(base, queries[i]);
+            results[i] = knn.get_topk();
         }
     };
 
@@ -194,6 +240,7 @@ struct Args {
     int k = 20;
     int increment = 10;
     int chunk_size = 10000;
+    int num_threads = 0;  
 };
 
 void print_help() {
@@ -209,6 +256,7 @@ void print_help() {
         << "  --inc INCREMENT      Increment size for batch processing "
            "(default: 10)\n"
         << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
+        << "  --threads N          Number of threads to use (default: 0, use system default)\n"
         << "  --help               Show this help message\n";
 }
 
@@ -236,12 +284,20 @@ Args parse_args(int argc, char *argv[]) {
             args.increment = std::stoi(argv[++i]);
         else if (arg == "--chunk_size" && i + 1 < argc)
             args.chunk_size = std::stoi(argv[++i]);
+        else if (arg == "--threads" && i + 1 < argc)
+            args.num_threads = std::stoi(argv[++i]);
     }
     return args;
 }
 
 int main(int argc, char *argv[]) {
     Args args = parse_args(argc, argv);
+
+    size_t num_threads = args.num_threads > 0 ? 
+                        static_cast<size_t>(args.num_threads) : 
+                        std::thread::hardware_concurrency();
+    
+    std::cout << "Using " << num_threads << " threads" << std::endl;
 
     std::cout << "Starting computation..." << std::endl;
     std::cout << "Reading base vectors from: " << args.base_path << std::endl;
@@ -268,44 +324,82 @@ int main(int argc, char *argv[]) {
         out.write(reinterpret_cast<const char *>(&args.k), sizeof(int));
         out.write(reinterpret_cast<const char *>(&b), sizeof(int));
 
+        std::vector<std::vector<std::vector<PointPair>>> batch_results;
+        std::vector<int> batch_sizes;
+        batch_results.reserve(args.chunk_size);
+        batch_sizes.reserve(args.chunk_size);
+
         size_t total_b = base.size();
+        size_t total_increments = total_b / args.increment;
+        size_t current_increment = 0;
+
         for (size_t b_size = args.increment; b_size <= total_b;
              b_size += args.increment) {
+            current_increment++;
             int current_base_size = static_cast<int>(b_size);
-            out.write(reinterpret_cast<const char *>(&current_base_size),
-                      sizeof(int));
+            batch_sizes.push_back(current_base_size);
 
-            for (size_t q_start = 0; q_start < queries.size();
-                 q_start += args.chunk_size) {
-                size_t q_end =
-                    std::min(q_start + args.chunk_size, queries.size());
-                std::vector<std::vector<float>> chunk_queries(
-                    queries.begin() + q_start, queries.begin() + q_end);
+            std::vector<std::vector<PointPair>> current_batch_results(queries.size());
+            std::vector<std::thread> threads;
+            size_t queries_per_thread = (queries.size() + num_threads - 1) / num_threads;
 
-                auto chunk_gt = compute_batch_groundtruth(base, chunk_queries,
-                                                          b_size, args.k);
+            auto worker = [&](size_t start, size_t end) {
+                IncrementalKNN knn(args.k);
+                for (size_t i = start; i < end && i < queries.size(); ++i) {
+                    knn.reset();
+                    std::vector<std::vector<float>> current_base(
+                        base.begin(), base.begin() + b_size);
+                    knn.add_new_vectors(current_base, queries[i]);
+                    current_batch_results[i] = knn.get_topk();
+                }
+            };
 
-                for (const auto &result : chunk_gt) {
-                    for (const auto &[id, dist] : result) {
-                        out.write(reinterpret_cast<const char *>(&id),
-                                  sizeof(int));
+            for (size_t t = 0; t < num_threads; ++t) {
+                size_t start = t * queries_per_thread;
+                size_t end = std::min(start + queries_per_thread, queries.size());
+                threads.emplace_back(worker, start, end);
+            }
+
+            for (auto &thread : threads) {
+                thread.join();
+            }
+
+            batch_results.push_back(std::move(current_batch_results));
+
+            std::cout << "Processed increment " << current_increment << "/" << total_increments 
+                      << " (" << (current_increment * 100 / total_increments) << "%)" 
+                      << " [base size: " << b_size << "]" << std::endl;
+
+            if (batch_results.size() >= static_cast<size_t>(args.chunk_size) || 
+                b_size + args.increment > total_b) {
+                std::cout << "Writing batch results for " << batch_results.size() 
+                          << " increments to disk" << std::endl;
+
+                for (size_t i = 0; i < batch_results.size(); ++i) {
+                    out.write(reinterpret_cast<const char *>(&batch_sizes[i]), sizeof(int));
+
+                    for (const auto &result : batch_results[i]) {
+                        for (const auto &[id, dist] : result) {
+                            out.write(reinterpret_cast<const char *>(&id), sizeof(int));
+                        }
+                    }
+
+                    for (const auto &result : batch_results[i]) {
+                        for (const auto &[id, dist] : result) {
+                            out.write(reinterpret_cast<const char *>(&dist), sizeof(float));
+                        }
                     }
                 }
 
-                for (const auto &result : chunk_gt) {
-                    for (const auto &[id, dist] : result) {
-                        out.write(reinterpret_cast<const char *>(&dist),
-                                  sizeof(float));
-                    }
-                }
                 out.flush();
+                std::cout << "Flushed " << batch_results.size() << " increments to disk" << std::endl;
 
-                chunk_gt.clear();
-                chunk_gt.shrink_to_fit();
-                chunk_queries.clear();
-                chunk_queries.shrink_to_fit();
+                batch_results.clear();
+                batch_sizes.clear();
             }
         }
+        out.close();
+        std::cout << "Closed output file: " << args.batch_gt_path << std::endl;
     }
 
     if (!args.gt_path.empty()) {

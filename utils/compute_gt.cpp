@@ -309,11 +309,14 @@ int main(int argc, char *argv[]) {
               << std::endl;
 
     if (!args.batch_gt_path.empty()) {
-        std::cout << "Attempting to open batch groundtruth file: " << args.batch_gt_path << std::endl;
+        std::cout << "Attempting to open batch groundtruth file: "
+                  << args.batch_gt_path << std::endl;
         std::ofstream out(args.batch_gt_path, std::ios::binary);
         if (!out.is_open()) {
-            std::cerr << "Error: Failed to open file: " << args.batch_gt_path << std::endl;
-            throw std::runtime_error("Failed to open file: " + args.batch_gt_path);
+            std::cerr << "Error: Failed to open file: " << args.batch_gt_path
+                      << std::endl;
+            throw std::runtime_error("Failed to open file: " +
+                                     args.batch_gt_path);
         }
         std::cout << "Successfully opened file for writing" << std::endl;
 

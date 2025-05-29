@@ -21,15 +21,23 @@ class IndexBase {
                                   std::vector<TagT> &res_tags) = 0;
 
     int batch_insert(const std::vector<T *> &batch_data,
-                     const std::vector<TagT> &batch_tags) {
+                     const std::vector<TagT> &batch_tags,
+                     uint64_t batch_id = 0) {
         int success_count = 0;
         insert_times.resize(batch_data.size(), 0.0);
 #pragma omp parallel for reduction(+ : success_count)
         for (size_t i = 0; i < batch_data.size(); ++i) {
             auto start = std::chrono::high_resolution_clock::now();
-            if (insert_point(batch_data[i], batch_tags[i]) == 0) {
-                success_count++;
+            if (batch_id == 0) {
+                if (insert_point(batch_data[i], batch_tags[i]) == 0) {
+                    success_count++;
+                }
+            } else {
+                if (insert_point(batch_data[i], batch_tags[i], batch_id) == 0) {
+                    success_count++;
+                }
             }
+
             auto end = std::chrono::high_resolution_clock::now();
             insert_times[i] =
                 std::chrono::duration<double, std::micro>(end - start).count();
@@ -39,14 +47,20 @@ class IndexBase {
 
     void batch_search(const std::vector<T *> &batch_queries, uint32_t k,
                       uint32_t Ls,
-                      std::vector<std::vector<TagT>> &batch_results) {
+                      std::vector<std::vector<TagT>> &batch_results,
+                      uint64_t batch_id = 0) {
         batch_results.resize(batch_queries.size());
         search_times.resize(batch_queries.size(), 0.0);
 #pragma omp parallel for
         for (size_t i = 0; i < batch_queries.size(); ++i) {
             batch_results[i].reserve(k);
             auto start = std::chrono::high_resolution_clock::now();
-            search_with_tags(batch_queries[i], k, Ls, batch_results[i]);
+            if (batch_id == 0) {
+                search_with_tags(batch_queries[i], k, Ls, batch_results[i]);
+            } else {
+                search_with_tags(batch_queries[i], k, Ls, batch_results[i],
+                                 batch_id);
+            }
             auto end = std::chrono::high_resolution_clock::now();
             search_times[i] =
                 std::chrono::duration<double, std::micro>(end - start).count();

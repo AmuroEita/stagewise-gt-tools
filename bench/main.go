@@ -26,6 +26,7 @@ type Task struct {
 	QueryIdx  uint32
 	RecallAt  uint32
 	Ls        uint32
+	BatchId   uint64
 	Timestamp time.Time
 }
 
@@ -37,8 +38,8 @@ type Stat struct {
 }
 
 type Index interface {
-	BatchInsert(data [][]float32, tags []uint32) error
-	BatchSearch(queries [][]float32, recallAt, Ls uint) ([][]uint32, error)
+	BatchInsert(data [][]float32, tags []uint32, batchId uint64) error
+	BatchSearch(queries [][]float32, recallAt, Ls uint, batchId uint64) ([][]uint32, error)
 }
 
 type Bench struct {
@@ -55,6 +56,7 @@ type Bench struct {
 	rateLimiter     *rate.Limiter
 	searchResults   []*internal.SearchResult
 	resultsMu       sync.Mutex
+	config          *Config
 }
 
 func ConcurrentBench(index Index, config Config) *Bench {
@@ -64,6 +66,7 @@ func ConcurrentBench(index Index, config Config) *Bench {
 		insertLatencies: make([]float64, 0),
 		searchLatencies: make([]float64, 0),
 		rateLimiter:     rate.NewLimiter(rate.Limit(config.Workload.InputRate), int(config.Workload.InputRate)),
+		config:          &config,
 	}
 }
 
@@ -88,6 +91,9 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 	}
 	queryIdx := 0
 	totalQueries := len(queries)
+	
+	var insertBatchId uint64 = 0
+	var searchBatchId uint64 = 0
 
 	for startInsertOffset < insertTotal || startSearchOffset < searchTotal {
 		endInsertOffset := min(startInsertOffset+batchSize, insertTotal)
@@ -110,8 +116,10 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 				Type:      InsertTask,
 				Data:      batchData,
 				Tags:      batchTags,
+				BatchId:   insertBatchId,
 				Timestamp: time.Now(),
 			}
+			insertBatchId++
 			startInsertOffset = endInsertOffset
 			b.insertCnt += len(batchData)
 		}
@@ -152,8 +160,10 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 			Tags:      batchTags,
 			RecallAt:  config.Search.RecallAt,
 			Ls:        config.Search.Ls,
+			BatchId:   searchBatchId,
 			Timestamp: time.Now(),
 		}
+		searchBatchId++
 		startSearchOffset = endSearchOffset
 		b.searchCnt += len(batchQueries)
 	}
@@ -168,9 +178,13 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 				start := time.Now()
 				switch task.Type {
 				case InsertTask:
-					b.rwMu.Lock()
-					err := b.index.BatchInsert(task.Data, task.Tags)
-					b.rwMu.Unlock()
+					if !b.config.Index.UseBatchId {
+						b.rwMu.Lock()
+					}
+					err := b.index.BatchInsert(task.Data, task.Tags, task.BatchId)
+					if !b.config.Index.UseBatchId {
+						b.rwMu.Unlock()
+					}
 					if err != nil {
 						fmt.Printf("Insert error: %v\n", err)
 						continue
@@ -178,9 +192,13 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					b.insertLatencies[b.insertCnt] = float64(time.Since(start).Microseconds())
 					b.insertCnt++
 				case SearchTask:
-					b.rwMu.RLock()
-					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls))
-					b.rwMu.RUnlock()
+					if !b.config.Index.UseBatchId {
+						b.rwMu.RLock()
+					}
+					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls), task.BatchId)
+					if !b.config.Index.UseBatchId {
+						b.rwMu.RUnlock()
+					}
 					if err != nil {
 						fmt.Printf("Search error: %v\n", err)
 						continue
@@ -254,6 +272,7 @@ type Config struct {
 		IndexType string `yaml:"index_type"`
 		M         int    `yaml:"m"`
 		Lb        int    `yaml:"lb"`
+		UseBatchId bool  `yaml:"use_batch_id"`
 	} `yaml:"index"`
 
 	Search struct {
@@ -341,7 +360,7 @@ func main() {
 			preData = append(preData, data[start:end])
 			preTags = append(preTags, uint32(i))
 		}
-		if err := index.BatchInsert(preData, preTags); err != nil {
+		if err := index.BatchInsert(preData, preTags, 0); err != nil {
 			fmt.Printf("Warn start error: %v\n", err)
 			return
 		}

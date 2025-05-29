@@ -63,25 +63,26 @@ int search_with_tags(void* index, float* query, size_t k, size_t Ls,
 }
 
 int batch_insert(void* index, float** batch_data, uint32_t* batch_tags,
-                 size_t batch_size) {
+                 size_t batch_size, uint64_t batch_id) {
     if (!index || !batch_data || !batch_tags) return -1;
 
     auto* idx = static_cast<HNSW<float>*>(index);
     std::vector<float*> data_vec(batch_data, batch_data + batch_size);
     std::vector<uint32_t> tags_vec(batch_tags, batch_tags + batch_size);
 
-    return idx->batch_insert(data_vec, tags_vec);
+    return idx->batch_insert(data_vec, tags_vec, batch_id);
 }
 
 int batch_search(void* index, float** batch_queries, size_t num_queries,
-                 uint32_t k, uint32_t Ls, uint32_t** batch_results) {
+                 uint32_t k, uint32_t Ls, uint32_t** batch_results,
+                 uint64_t batch_id) {
     if (!index || !batch_queries || !batch_results) return -1;
 
     auto* idx = static_cast<HNSW<float>*>(index);
     std::vector<float*> queries_vec(batch_queries, batch_queries + num_queries);
     std::vector<std::vector<uint32_t>> results;
 
-    idx->batch_search(queries_vec, k, Ls, results);
+    idx->batch_search(queries_vec, k, Ls, results, batch_id);
 
     for (size_t i = 0; i < results.size(); ++i) {
         batch_results[i] = new uint32_t[k];

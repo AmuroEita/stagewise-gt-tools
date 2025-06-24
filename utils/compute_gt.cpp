@@ -44,21 +44,22 @@ float euclidean_distance_simd(const std::vector<float> &a,
 }
 
 class IncrementalKNN {
-private:
-    std::priority_queue<PointPair, std::vector<PointPair>, std::less<PointPair>> max_heap;
+   private:
+    std::priority_queue<PointPair, std::vector<PointPair>, std::less<PointPair>>
+        max_heap;
     size_t current_size;
     int k;
 
-public:
+   public:
     IncrementalKNN(int k) : current_size(0), k(k) {}
 
-    void add_new_vectors(const std::vector<std::vector<float>>& new_vectors,
-                        const std::vector<float>& query) {
-        for(const auto& vec : new_vectors) {
+    void add_new_vectors(const std::vector<std::vector<float>> &new_vectors,
+                         const std::vector<float> &query) {
+        for (const auto &vec : new_vectors) {
             float dist = euclidean_distance_simd(query, vec);
-            if(max_heap.size() < static_cast<size_t>(k)) {
+            if (max_heap.size() < static_cast<size_t>(k)) {
                 max_heap.emplace(dist, static_cast<int>(current_size++));
-            } else if(dist < max_heap.top().first) {
+            } else if (dist < max_heap.top().first) {
                 max_heap.pop();
                 max_heap.emplace(dist, static_cast<int>(current_size++));
             } else {
@@ -240,7 +241,7 @@ struct Args {
     int k = 20;
     int increment = 10;
     int chunk_size = 10000;
-    int num_threads = 0;  
+    int num_threads = 0;
 };
 
 void print_help() {
@@ -256,7 +257,8 @@ void print_help() {
         << "  --inc INCREMENT      Increment size for batch processing "
            "(default: 10)\n"
         << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
-        << "  --threads N          Number of threads to use (default: 0, use system default)\n"
+        << "  --threads N          Number of threads to use (default: 0, use "
+           "system default)\n"
         << "  --help               Show this help message\n";
 }
 
@@ -293,10 +295,10 @@ Args parse_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     Args args = parse_args(argc, argv);
 
-    size_t num_threads = args.num_threads > 0 ? 
-                        static_cast<size_t>(args.num_threads) : 
-                        std::thread::hardware_concurrency();
-    
+    size_t num_threads = args.num_threads > 0
+                             ? static_cast<size_t>(args.num_threads)
+                             : std::thread::hardware_concurrency();
+
     std::cout << "Using " << num_threads << " threads" << std::endl;
 
     std::cout << "Starting computation..." << std::endl;
@@ -342,9 +344,11 @@ int main(int argc, char *argv[]) {
             int current_base_size = static_cast<int>(b_size);
             batch_sizes.push_back(current_base_size);
 
-            std::vector<std::vector<PointPair>> current_batch_results(queries.size());
+            std::vector<std::vector<PointPair>> current_batch_results(
+                queries.size());
             std::vector<std::thread> threads;
-            size_t queries_per_thread = (queries.size() + num_threads - 1) / num_threads;
+            size_t queries_per_thread =
+                (queries.size() + num_threads - 1) / num_threads;
 
             auto worker = [&](size_t start, size_t end) {
                 IncrementalKNN knn(args.k);
@@ -359,7 +363,8 @@ int main(int argc, char *argv[]) {
 
             for (size_t t = 0; t < num_threads; ++t) {
                 size_t start = t * queries_per_thread;
-                size_t end = std::min(start + queries_per_thread, queries.size());
+                size_t end =
+                    std::min(start + queries_per_thread, queries.size());
                 threads.emplace_back(worker, start, end);
             }
 
@@ -369,33 +374,39 @@ int main(int argc, char *argv[]) {
 
             batch_results.push_back(std::move(current_batch_results));
 
-            std::cout << "Processed increment " << current_increment << "/" << total_increments 
-                      << " (" << (current_increment * 100 / total_increments) << "%)" 
+            std::cout << "Processed increment " << current_increment << "/"
+                      << total_increments << " ("
+                      << (current_increment * 100 / total_increments) << "%)"
                       << " [base size: " << b_size << "]" << std::endl;
 
-            if (batch_results.size() >= static_cast<size_t>(args.chunk_size) || 
+            if (batch_results.size() >= static_cast<size_t>(args.chunk_size) ||
                 b_size + args.increment > total_b) {
-                std::cout << "Writing batch results for " << batch_results.size() 
-                          << " increments to disk" << std::endl;
+                std::cout << "Writing batch results for "
+                          << batch_results.size() << " increments to disk"
+                          << std::endl;
 
                 for (size_t i = 0; i < batch_results.size(); ++i) {
-                    out.write(reinterpret_cast<const char *>(&batch_sizes[i]), sizeof(int));
+                    out.write(reinterpret_cast<const char *>(&batch_sizes[i]),
+                              sizeof(int));
 
                     for (const auto &result : batch_results[i]) {
                         for (const auto &[id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&id), sizeof(int));
+                            out.write(reinterpret_cast<const char *>(&id),
+                                      sizeof(int));
                         }
                     }
 
                     for (const auto &result : batch_results[i]) {
                         for (const auto &[id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&dist), sizeof(float));
+                            out.write(reinterpret_cast<const char *>(&dist),
+                                      sizeof(float));
                         }
                     }
                 }
 
                 out.flush();
-                std::cout << "Flushed " << batch_results.size() << " increments to disk" << std::endl;
+                std::cout << "Flushed " << batch_results.size()
+                          << " increments to disk" << std::endl;
 
                 batch_results.clear();
                 batch_sizes.clear();

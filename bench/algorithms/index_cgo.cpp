@@ -86,8 +86,7 @@ int batch_search(float** batch_queries, size_t num_queries, uint32_t k,
                  uint32_t Ls, uint32_t** batch_results) {
     if (!g_index || !batch_queries || !batch_results) return -1;
 
-    std::vector<float*> queries_vec(batch_queries,
-                                      batch_queries + num_queries);
+    std::vector<float*> queries_vec(batch_queries, batch_queries + num_queries);
     std::vector<std::vector<uint32_t>> results;
 
     g_index->batch_search(queries_vec, k, Ls, results);

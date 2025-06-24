@@ -309,11 +309,11 @@ type Config struct {
 	} `yaml:"search"`
 
 	Workload struct {
-		WriteRatio   float64 `yaml:"write_ratio"`
-		NumThreads   int     `yaml:"num_threads"`
-		QueueSize    int     `yaml:"queue_size"`
-		QueryNewData bool    `yaml:"query_new_data"`
-		InputRate    float64 `yaml:"input_rate"`
+		WriteRatio         float64 `yaml:"write_ratio"`
+		NumThreads         int     `yaml:"num_threads"`
+		QueueSize          int     `yaml:"queue_size"`
+		QueryNewData       bool    `yaml:"query_new_data"`
+		InputRate          float64 `yaml:"input_rate"`
 		EnforceConsistency bool    `yaml:"enforce_consistency"`
 	} `yaml:"workload"`
 

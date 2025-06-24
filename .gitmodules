@@ -1,3 +1,7 @@
 [submodule "bench/algorithms/hnsw/hnswlib"]
 	path = bench/algorithms/hnsw/hnswlib
 	url = https://github.com/nmslib/hnswlib.git
+
+[submodule "bench/algorithms/parlayann/parlayann"]
+	path = bench/algorithms/parlayann/parlayann
+	url = https://github.com/Kwan-Yiu/ParlayANN.git

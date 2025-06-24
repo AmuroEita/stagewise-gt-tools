@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -56,6 +57,7 @@ type Bench struct {
 	rateLimiter     *rate.Limiter
 	searchResults   []*internal.SearchResult
 	resultsMu       sync.Mutex
+	config          *Config
 }
 
 func ConcurrentBench(index Index, config Config) *Bench {
@@ -65,6 +67,7 @@ func ConcurrentBench(index Index, config Config) *Bench {
 		insertLatencies: make([]float64, 0),
 		searchLatencies: make([]float64, 0),
 		rateLimiter:     rate.NewLimiter(rate.Limit(config.Workload.InputRate), int(config.Workload.InputRate)),
+		config:          &config,
 	}
 }
 
@@ -89,7 +92,7 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 		int(insertTotal-beginNum),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(false),
-		progressbar.OptionSetWidth(15),
+		progressbar.OptionSetWidth(50),
 		progressbar.OptionSetDescription("Insert: 0/s, Search: 0/s"),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
@@ -184,9 +187,13 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 				start := time.Now()
 				switch task.Type {
 				case InsertTask:
-					b.rwMu.Lock()
+					if b.config.Workload.EnforceConsistency {
+						b.rwMu.Lock()
+					}
 					err := b.index.BatchInsert(task.Data, task.Tags)
-					b.rwMu.Unlock()
+					if b.config.Workload.EnforceConsistency {
+						b.rwMu.Unlock()
+					}
 					if err != nil {
 						fmt.Printf("Insert error: %v\n", err)
 						continue
@@ -194,9 +201,13 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
 					b.insertCnt++
 				case SearchTask:
-					b.rwMu.RLock()
+					if b.config.Workload.EnforceConsistency {
+						b.rwMu.RLock()
+					}
 					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls))
-					b.rwMu.RUnlock()
+					if b.config.Workload.EnforceConsistency {
+						b.rwMu.RUnlock()
+					}
 					if err != nil {
 						fmt.Printf("Search error: %v\n", err)
 						continue
@@ -223,17 +234,26 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	fmt.Println()
+
 	if b.insertCnt > 0 {
 		b.stats.InsertQPS = float64(b.insertCnt) / elapsedSec
 		b.stats.MeanInsertLatency = mean(b.insertLatencies)
+		p95 := percentile(b.insertLatencies, 0.95)
+		p99 := percentile(b.insertLatencies, 0.99)
+		fmt.Printf("Insert QPS: %.2f, Mean Insert Latency: %.2f us, P95: %.2f us, P99: %.2f us\n", b.stats.InsertQPS, b.stats.MeanInsertLatency, p95, p99)
+	} else {
+		fmt.Println("No insert operations performed.")
 	}
 	if b.searchCnt > 0 {
 		b.stats.SearchQPS = float64(b.searchCnt) / elapsedSec
 		b.stats.MeanSearchLatency = mean(b.searchLatencies)
+		p95 := percentile(b.searchLatencies, 0.95)
+		p99 := percentile(b.searchLatencies, 0.99)
+		fmt.Printf("Search QPS: %.2f, Mean Search Latency: %.2f us, P95: %.2f us, P99: %.2f us\n", b.stats.SearchQPS, b.stats.MeanSearchLatency, p95, p99)
+	} else {
+		fmt.Println("No search operations performed.")
 	}
-
-	fmt.Printf("Insert QPS: %.2f, Mean Insert Latency: %.2f us\n", b.stats.InsertQPS, b.stats.MeanInsertLatency)
-	fmt.Printf("Search QPS: %.2f, Mean Search Latency: %.2f us\n", b.stats.SearchQPS, b.stats.MeanSearchLatency)
 }
 
 func min(a, b int) int {
@@ -252,6 +272,17 @@ func mean(values []float64) float64 {
 		sum += v
 	}
 	return sum / float64(len(values))
+}
+
+func percentile(values []float64, p float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+	idx := int(float64(len(sorted)-1) * p)
+	return sorted[idx]
 }
 
 type Config struct {
@@ -283,7 +314,7 @@ type Config struct {
 		QueueSize    int     `yaml:"queue_size"`
 		QueryNewData bool    `yaml:"query_new_data"`
 		InputRate    float64 `yaml:"input_rate"`
-		Async        bool    `yaml:"async"`
+		EnforceConsistency bool    `yaml:"enforce_consistency"`
 	} `yaml:"workload"`
 
 	Result struct {

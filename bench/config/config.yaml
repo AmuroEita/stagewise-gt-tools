@@ -23,7 +23,7 @@ workload:
   queue_size: 1000
   query_new_data: false
   input_rate: 2000
-  async: true
+  enforce_consistency: true
 
 result:
   output_dir: ./result

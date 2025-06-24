@@ -3,15 +3,25 @@
 #include <vector>
 
 #include "hnsw/hnsw.hpp"
+#include "index.hpp"
 
 extern "C" {
 
+static IndexBase<float>* g_index = nullptr;
+static size_t g_dim = 0;
+
 void* create_index(IndexType type, IndexParams params) {
+    if (g_index) {
+        delete g_index;
+    }
+    g_dim = params.dim;
+
     switch (type) {
         case INDEX_TYPE_HNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                return new HNSW<float>(params.dim, params.max_elements,
-                                       params.M, params.Lb);
+                g_index = new HNSW<float>(params.dim, params.max_elements,
+                                          params.M, params.Lb);
+                return g_index;
             }
             return nullptr;
         default:
@@ -19,42 +29,39 @@ void* create_index(IndexType type, IndexParams params) {
     }
 }
 
-void destroy_index(void* index) {
-    if (index) {
-        delete static_cast<HNSW<float>*>(index);
+void destroy_index() {
+    if (g_index) {
+        delete g_index;
+        g_index = nullptr;
+        g_dim = 0;
     }
 }
 
-int build_index(void* index, float* data, size_t num_points, uint32_t* tags) {
-    if (!index || !data || !tags) return -1;
+int build_index(float* data, size_t num_points, uint32_t* tags) {
+    if (!g_index || !data || !tags) return -1;
 
-    auto* idx = static_cast<HNSW<float>*>(index);
     std::vector<uint32_t> tags_vec(tags, tags + num_points);
-    idx->build(data, num_points, tags_vec);
+    g_index->build(data, num_points, tags_vec);
     return 0;
 }
 
-int insert_point(void* index, float* point, uint32_t tag) {
-    if (!index || !point) return -1;
+int insert_point(float* point, uint32_t tag) {
+    if (!g_index || !point) return -1;
 
-    auto* idx = static_cast<HNSW<float>*>(index);
-    return idx->insert_point(point, tag);
+    return g_index->insert_point(point, tag);
 }
 
-void set_query_params(void* index, size_t Ls) {
-    if (!index) return;
+void set_query_params(size_t Ls) {
+    if (!g_index) return;
 
-    auto* idx = static_cast<HNSW<float>*>(index);
-    idx->set_query_params(Ls);
+    g_index->set_query_params(Ls);
 }
 
-int search_with_tags(void* index, float* query, size_t k, size_t Ls,
-                     uint32_t* res_tags) {
-    if (!index || !query || !res_tags) return -1;
+int search_with_tags(float* query, size_t k, size_t Ls, uint32_t* res_tags) {
+    if (!g_index || !query || !res_tags) return -1;
 
-    auto* idx = static_cast<HNSW<float>*>(index);
     std::vector<uint32_t> results;
-    idx->search_with_tags(query, k, Ls, results);
+    g_index->search_with_tags(query, k, Ls, results);
 
     for (size_t i = 0; i < results.size(); ++i) {
         res_tags[i] = results[i];
@@ -62,26 +69,28 @@ int search_with_tags(void* index, float* query, size_t k, size_t Ls,
     return 0;
 }
 
-int batch_insert(void* index, float** batch_data, uint32_t* batch_tags,
-                 size_t batch_size) {
-    if (!index || !batch_data || !batch_tags) return -1;
-
-    auto* idx = static_cast<HNSW<float>*>(index);
-    std::vector<float*> data_vec(batch_data, batch_data + batch_size);
-    std::vector<uint32_t> tags_vec(batch_tags, batch_tags + batch_size);
-
-    return idx->batch_insert(data_vec, tags_vec);
+int batch_insert(float* batch_data, uint32_t* batch_tags, size_t batch_size) {
+    if (!g_index || !batch_data || !batch_tags) return -1;
+    int success_count = 0;
+#pragma omp parallel for reduction(+ : success_count)
+    for (size_t i = 0; i < batch_size; ++i) {
+        float* point = batch_data + i * g_dim;
+        if (g_index->insert_point(point, batch_tags[i]) == 0) {
+            success_count++;
+        }
+    }
+    return success_count == batch_size ? 0 : -1;
 }
 
-int batch_search(void* index, float** batch_queries, size_t num_queries,
-                 uint32_t k, uint32_t Ls, uint32_t** batch_results) {
-    if (!index || !batch_queries || !batch_results) return -1;
+int batch_search(float** batch_queries, size_t num_queries, uint32_t k,
+                 uint32_t Ls, uint32_t** batch_results) {
+    if (!g_index || !batch_queries || !batch_results) return -1;
 
-    auto* idx = static_cast<HNSW<float>*>(index);
-    std::vector<float*> queries_vec(batch_queries, batch_queries + num_queries);
+    std::vector<float*> queries_vec(batch_queries,
+                                      batch_queries + num_queries);
     std::vector<std::vector<uint32_t>> results;
 
-    idx->batch_search(queries_vec, k, Ls, results);
+    g_index->batch_search(queries_vec, k, Ls, results);
 
     for (size_t i = 0; i < results.size(); ++i) {
         batch_results[i] = new uint32_t[k];

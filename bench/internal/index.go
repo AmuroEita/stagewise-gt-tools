@@ -1,8 +1,9 @@
 package internal
 
 // #cgo CXXFLAGS: -I${SRCDIR}/../algorithms
-// #cgo LDFLAGS: -L${SRCDIR}/../algorithms -lindex
+// #cgo LDFLAGS: -L${SRCDIR}/../build/lib -lindex
 // #cgo CXXFLAGS: -std=c++14
+// #include <stdlib.h>
 // #include "../algorithms/index_cgo.hpp"
 import "C"
 import (
@@ -14,7 +15,6 @@ type IndexType int
 
 const (
 	IndexTypeHNSW IndexType = iota
-	IndexTypeVAMANA
 	IndexTypePARLAYANN
 	IndexTypeCCHNSW
 )
@@ -53,7 +53,7 @@ func NewIndex(indexType IndexType, params IndexParams) *Index {
 
 func (i *Index) Close() {
 	if i.ptr != nil {
-		C.destroy_index(i.ptr)
+		C.destroy_index()
 		i.ptr = nil
 	}
 }
@@ -64,9 +64,8 @@ func (i *Index) Build(data []float32, tags []uint32) error {
 	}
 
 	result := C.build_index(
-		i.ptr,
 		(*C.float)(&data[0]),
-		C.size_t(len(data)),
+		C.size_t(len(tags)),
 		(*C.uint32_t)(&tags[0]),
 	)
 
@@ -82,7 +81,6 @@ func (i *Index) InsertPoint(point []float32, tag uint32) error {
 	}
 
 	result := C.insert_point(
-		i.ptr,
 		(*C.float)(&point[0]),
 		C.uint32_t(tag),
 	)
@@ -94,7 +92,7 @@ func (i *Index) InsertPoint(point []float32, tag uint32) error {
 }
 
 func (i *Index) SetQueryParams(Ls uint) {
-	C.set_query_params(i.ptr, C.size_t(Ls))
+	C.set_query_params(C.size_t(Ls))
 }
 
 func (i *Index) Search(query []float32, k, Ls uint) ([]uint32, error) {
@@ -104,7 +102,6 @@ func (i *Index) Search(query []float32, k, Ls uint) ([]uint32, error) {
 
 	results := make([]uint32, k)
 	result := C.search_with_tags(
-		i.ptr,
 		(*C.float)(&query[0]),
 		C.size_t(k),
 		C.size_t(Ls),
@@ -122,17 +119,20 @@ func (i *Index) BatchInsert(batchData [][]float32, batchTags []uint32) error {
 		return nil
 	}
 
-	// 创建指向每个向量的指针数组
-	dataPtrs := make([]*float32, len(batchData))
-	for j := range batchData {
-		dataPtrs[j] = &batchData[j][0]
+	numPoints := len(batchData)
+	if numPoints == 0 {
+		return nil
+	}
+	dim := len(batchData[0])
+	flatData := make([]float32, numPoints*dim)
+	for j, vec := range batchData {
+		copy(flatData[j*dim:], vec)
 	}
 
 	result := C.batch_insert(
-		i.ptr,
-		(**C.float)(unsafe.Pointer(&dataPtrs[0])),
+		(*C.float)(&flatData[0]),
 		(*C.uint32_t)(&batchTags[0]),
-		C.size_t(len(batchData)),
+		C.size_t(numPoints),
 	)
 
 	if result != 0 {
@@ -146,25 +146,31 @@ func (i *Index) BatchSearch(queries [][]float32, k, Ls uint) ([][]uint32, error)
 		return nil, nil
 	}
 
-	// 创建指向每个查询向量的指针数组
-	queryPtrs := make([]*float32, len(queries))
-	for j := range queries {
-		queryPtrs[j] = &queries[j][0]
+	queryPtrsC := C.malloc(C.size_t(len(queries)) * C.size_t(unsafe.Sizeof(uintptr(0))))
+	defer C.free(unsafe.Pointer(queryPtrsC))
+	queryPtrsGo := (*[1 << 30]*C.float)(queryPtrsC)[:len(queries):len(queries)]
+	for j, q := range queries {
+		queryPtrsGo[j] = (*C.float)(&q[0])
 	}
 
-	// 创建结果数组
 	results := make([][]uint32, len(queries))
 	for j := range results {
 		results[j] = make([]uint32, k)
 	}
 
+	resultPtrsC := C.malloc(C.size_t(len(results)) * C.size_t(unsafe.Sizeof(uintptr(0))))
+	defer C.free(unsafe.Pointer(resultPtrsC))
+	resultPtrsGo := (*[1 << 30]*C.uint32_t)(resultPtrsC)[:len(results):len(results)]
+	for j, r := range results {
+		resultPtrsGo[j] = (*C.uint32_t)(&r[0])
+	}
+
 	result := C.batch_search(
-		i.ptr,
-		(**C.float)(unsafe.Pointer(&queryPtrs[0])),
+		(**C.float)(queryPtrsC),
 		C.size_t(len(queries)),
 		C.uint32_t(k),
 		C.uint32_t(Ls),
-		(**C.uint32_t)(unsafe.Pointer(&results[0])),
+		(**C.uint32_t)(resultPtrsC),
 	)
 
 	if result != 0 {

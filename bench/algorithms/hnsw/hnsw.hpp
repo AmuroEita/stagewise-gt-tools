@@ -23,10 +23,10 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
-    void set_query_params(size_t Ls) { index->setEf(Ls); }
+    void set_query_params(const size_t Ls) override { index->setEf(Ls); }
 
     void search_with_tags(const T *query, size_t k, size_t Ls,
-                          std::vector<TagT> &result_tags) {
+                          std::vector<TagT> &result_tags) override {
         if (!is_ef_set) {
             index->setEf(Ls);
             is_ef_set = true;

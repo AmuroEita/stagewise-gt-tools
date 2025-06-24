@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 )
@@ -69,17 +70,12 @@ func ConcurrentBench(index Index, config Config) *Bench {
 
 func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
 	defer close(b.taskQueue)
-
 	beginNum := config.Data.BeginNum
 	writeRatio := config.Workload.WriteRatio
 	batchSize := config.Data.BatchSize
 
-	insertTotal := len(data)
-	searchTotal := int(float64(insertTotal) * (1 - writeRatio) / writeRatio)
-	searchBatchSize := int(float64(batchSize) * (1 - writeRatio) / writeRatio)
-
-	b.insertLatencies = make([]float64, insertTotal)
-	b.searchLatencies = make([]float64, searchTotal)
+	insertTotal := len(data) / dim
+	searchTotal := config.Data.MaxQueries
 
 	startInsertOffset := beginNum
 	startSearchOffset := 0
@@ -87,33 +83,45 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 		startSearchOffset = beginNum
 	}
 	queryIdx := 0
-	totalQueries := len(queries)
+	totalQueries := len(queries) / dim
+
+	bar := progressbar.NewOptions(
+		int(insertTotal-beginNum),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowBytes(false),
+		progressbar.OptionSetWidth(15),
+		progressbar.OptionSetDescription("Insert: 0/s, Search: 0/s"),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
+
+	startTime := time.Now()
 
 	for startInsertOffset < insertTotal || startSearchOffset < searchTotal {
-		endInsertOffset := min(startInsertOffset+batchSize, insertTotal)
-		if startInsertOffset < endInsertOffset {
-			batchData := make([][]float32, 0, batchSize)
-			batchTags := make([]uint32, 0, batchSize)
+		insertBatchSize := int(float64(batchSize) * writeRatio)
+		searchBatchSize := batchSize - insertBatchSize
+
+		endInsertOffset := min(startInsertOffset+insertBatchSize, insertTotal)
+		if endInsertOffset > startInsertOffset {
+			task := Task{
+				Type: InsertTask,
+				Data: make([][]float32, 0, endInsertOffset-startInsertOffset),
+				Tags: make([]uint32, 0, endInsertOffset-startInsertOffset),
+			}
 			for i := startInsertOffset; i < endInsertOffset; i++ {
 				start := i * dim
 				end := start + dim
-				batchData = append(batchData, data[start:end])
-				batchTags = append(batchTags, uint32(beginNum+i))
+				task.Data = append(task.Data, data[start:end])
+				task.Tags = append(task.Tags, uint32(i))
 			}
-
-			if err := b.rateLimiter.Wait(context.Background()); err != nil {
-				fmt.Printf("Rate limit error: %v\n", err)
-				continue
-			}
-
-			b.taskQueue <- Task{
-				Type:      InsertTask,
-				Data:      batchData,
-				Tags:      batchTags,
-				Timestamp: time.Now(),
-			}
+			b.taskQueue <- task
+			bar.Add(endInsertOffset - startInsertOffset)
 			startInsertOffset = endInsertOffset
-			b.insertCnt += len(batchData)
 		}
 
 		endSearchOffset := min(startSearchOffset+searchBatchSize, searchTotal)
@@ -156,6 +164,14 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 		}
 		startSearchOffset = endSearchOffset
 		b.searchCnt += len(batchQueries)
+		bar.Add(len(batchQueries))
+
+		elapsed := time.Since(startTime).Seconds()
+		if elapsed > 0 {
+			insertQPS := float64(b.insertCnt) / elapsed
+			searchQPS := float64(b.searchCnt) / elapsed
+			bar.Describe(fmt.Sprintf("Insert: %.0f/s, Search: %.0f/s", insertQPS, searchQPS))
+		}
 	}
 }
 
@@ -175,7 +191,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 						fmt.Printf("Insert error: %v\n", err)
 						continue
 					}
-					b.insertLatencies[b.insertCnt] = float64(time.Since(start).Microseconds())
+					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
 					b.insertCnt++
 				case SearchTask:
 					b.rwMu.RLock()
@@ -195,7 +211,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 						b.searchResults = append(b.searchResults, result)
 					}
 					b.resultsMu.Unlock()
-					b.searchLatencies[b.searchCnt] = float64(time.Since(start).Microseconds())
+					b.searchLatencies = append(b.searchLatencies, float64(time.Since(start).Microseconds()))
 					b.searchCnt++
 				}
 			}

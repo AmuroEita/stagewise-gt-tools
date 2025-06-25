@@ -373,6 +373,15 @@ func main() {
 			DataType:    internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeHNSW, params)
+	case "parlayhnsw":
+		params := internal.IndexParams{
+			Dim:         dataDim,
+			MaxElements: config.Data.MaxElements,
+			M:           config.Index.M,
+			Lb:          config.Index.Lb,
+			DataType:    internal.DataTypeFloat,
+		}
+		index = internal.NewIndex(internal.IndexTypeParlayHNSW, params)
 	default:
 		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
 		return

@@ -49,8 +49,8 @@ void destroy_index() {
 }
 
 int build(float* data, uint32_t* tags, size_t num_points) {
-    std::cout << "[build] num_points: " << num_points
-              << ", g_dim: " << g_dim << std::endl;
+    std::cout << "[build] num_points: " << num_points << ", g_dim: " << g_dim
+              << std::endl;
     if (!g_index || !data || !tags) return -1;
 
     g_index->build(data, tags, num_points);
@@ -86,10 +86,11 @@ int batch_insert(float* batch_data, uint32_t* batch_tags, size_t batch_size) {
     return g_index->batch_insert(batch_data, batch_tags, batch_size);
 }
 
-int batch_search(float* batch_queries, uint32_t k,
-                 uint32_t Ls, size_t num_queries, uint32_t** batch_results) {
+int batch_search(float* batch_queries, uint32_t k, uint32_t Ls,
+                 size_t num_queries, uint32_t** batch_results) {
     if (!g_index || !batch_queries) return -1;
-    return g_index->batch_search(batch_queries, k, Ls, num_queries, batch_results);
+    return g_index->batch_search(batch_queries, k, Ls, num_queries,
+                                 batch_results);
 }
 
 }  // extern "C"

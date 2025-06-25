@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstddef>
 #include <chrono>
+#include <cstddef>
 
 #include "../index.hpp"
 #include "hnswlib/hnswlib/hnswlib.h"
@@ -13,7 +13,7 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
          size_t num_threads)
         : dim_(dim), num_threads_(num_threads), space(dim) {
         index_ = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
-                                                ef_construction);
+                                                 ef_construction);
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
@@ -22,12 +22,13 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         }
     }
 
-    int insert(const T *data, const TagT tag) override {
+    int insert(const T* data, const TagT tag) override {
         index_->addPoint(data, tag);
         return 0;
     }
 
-    int batch_insert(const T* batch_data, const TagT* batch_tags, size_t num_points) override {
+    int batch_insert(const T* batch_data, const TagT* batch_tags,
+                     size_t num_points) override {
         int success_count = 0;
 #pragma omp parallel for reduction(+ : success_count) num_threads(num_threads_)
         for (size_t i = 0; i < num_points; ++i) {
@@ -39,13 +40,13 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
 
     void set_query_params(size_t Ls) override { index_->setEf(Ls); }
 
-    int batch_search(const T* batch_queries, uint32_t k,
-                     uint32_t Ls, size_t num_queries, TagT** batch_results) override {
+    int batch_search(const T* batch_queries, uint32_t k, uint32_t Ls,
+                     size_t num_queries, TagT** batch_results) override {
         if (!is_ef_set) {
             index_->setEf(Ls);
             is_ef_set = true;
         }
-        
+
         std::vector<std::vector<TagT>> results(num_queries);
 
         this->search_latencies.resize(num_queries, 0.0);
@@ -67,8 +68,8 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
-    int search_with_tags(const T *query, size_t k, size_t Ls,
-                          std::vector<TagT> &result_tags) override {
+    int search_with_tags(const T* query, size_t k, size_t Ls,
+                         std::vector<TagT>& result_tags) override {
         auto result = index_->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);
@@ -81,6 +82,6 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     size_t num_threads_ = 1;
     size_t dim_;
     hnswlib::L2Space space;
-    hnswlib::HierarchicalNSW<T> *index_;
+    hnswlib::HierarchicalNSW<T>* index_;
     bool is_ef_set = false;
 };

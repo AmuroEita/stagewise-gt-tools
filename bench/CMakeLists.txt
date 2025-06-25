@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(algorithms/hnsw/hnswlib hnswlib)
-add_subdirectory(algorithms/parlayann/ParlayANN parlayann)
+add_subdirectory(algorithms/parlayann/parlayann parlayann)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
@@ -22,5 +22,5 @@ target_include_directories(index PRIVATE
 
 target_link_libraries(index PRIVATE
     hnswlib
-    parlayann
+    ParlayANN
 )

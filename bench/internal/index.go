@@ -15,7 +15,8 @@ type IndexType int
 
 const (
 	IndexTypeHNSW IndexType = iota
-	IndexTypePARLAYANN
+	IndexTypeParlayHNSW
+	IndexTypeParlayVamana
 	IndexTypeCCHNSW
 )
 
@@ -58,17 +59,21 @@ func (i *Index) Close() {
 	}
 }
 
-func (i *Index) Build(data []float32, tags []uint32) error {
+func (i *Index) Build(data [][]float32, tags []uint32) error {
 	if len(data) == 0 || len(tags) == 0 {
 		return nil
 	}
-
+	numPoints := len(data)
+	dim := len(data[0])
+	flatData := make([]float32, numPoints*dim)
+	for j, vec := range data {
+		copy(flatData[j*dim:], vec)
+	}
 	result := C.build_index(
-		(*C.float)(&data[0]),
+		(*C.float)(&flatData[0]),
 		C.size_t(len(tags)),
 		(*C.uint32_t)(&tags[0]),
 	)
-
 	if result != 0 {
 		return fmt.Errorf("build index failed with code: %d", result)
 	}

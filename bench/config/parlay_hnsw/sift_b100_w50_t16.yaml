@@ -9,7 +9,7 @@ data:
   query_path: ../data/sift/sift_query.bin
 
 index:
-  index_type: hnsw
+  index_type: parlayhnsw
   m: 32
   lb: 200
 
@@ -20,9 +20,9 @@ search:
 workload:
   write_ratio: 0.5
   num_threads: 16
-  queue_size: 1000
+  queue_size: 20000
   query_new_data: false
-  input_rate: 2000
+  input_rate: 1000
   enforce_consistency: true
 
 result:

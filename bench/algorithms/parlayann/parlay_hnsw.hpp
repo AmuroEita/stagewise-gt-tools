@@ -6,8 +6,10 @@
 #include "parlayann/algorithms/HNSW/type_point.hpp"
 #include "parlayann/algorithms/utils/euclidian_point.h"
 #include "parlayann/algorithms/utils/point_range.h"
+#include <cstddef>
 #include <memory>
 #include <vector>
+#include <iostream>
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
@@ -19,33 +21,50 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     
     using desc = descr_l2<T>;
 
-    ParlayHNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction, float m_l, float alpha)
+    ParlayHNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction, float m_l, float alpha, size_t num_threads)
         : dim_(dim),
           graph_degree_(M), 
           ef_construction_(ef_construction), 
           m_l_(m_l), 
-          alpha_(alpha) {
+          alpha_(alpha),
+          num_threads_(num_threads) {
     }
 
-    void build(T *data, size_t num_points, std::vector<TagT> &tags) {
+    void build(T *data, size_t num_points, std::vector<TagT> &tags) override{
         using PointType = parlayANN::Euclidian_Point<T>;
         
+        std::cout << "[build] num_points: " << num_points << ", dim_: " << dim_ << std::endl;
+        if (num_points > 0 && data != nullptr) {
+            std::cout << "[build] first point: ";
+            for (size_t d = 0; d < std::min<size_t>(dim_, 5); ++d) {
+                std::cout << data[d] << " ";
+            }
+            std::cout << "..." << std::endl;
+        }
+        std::cout << "[build] tags.size(): " << tags.size() << std::endl;
+        if (!tags.empty()) {
+            std::cout << "[build] first tag: " << tags[0] << std::endl;
+        }
+
         auto ps = parlay::delayed_seq<PointType>(num_points, [&](size_t i) {
             return PointType(data + i * dim_);
         });
         
+        std::cout << "[build] start building HNSW index..." << std::endl;
         index_ = std::make_unique<ANN::HNSW<desc>>(
             ps.begin(), ps.end(), dim_, m_l_, graph_degree_, ef_construction_, alpha_
         );
+        std::cout << "[build] finished building HNSW index." << std::endl;
     }
 
-    int batch_insert(T *data, size_t num_points, std::vector<TagT> &tags) override {
+    int batch_insert(const std::vector<T *> &batch_data, const std::vector<TagT> &batch_tags) override {
         if (!index_) return -1;
         using PointType = parlayANN::Euclidian_Point<T>;
+        size_t num_points = batch_data.size();
         auto ps = parlay::delayed_seq<PointType>(num_points, [&](size_t i) {
-            return PointType(data + i * dim_);
+            return PointType(batch_data[i]);
         });
-        uint32_t start_id = tags.empty() ? 0 : tags[0];
+        uint32_t start_id = batch_tags.empty() ? 0 : batch_tags[0];
         index_->batch_insert(ps.begin(), ps.end(), start_id);
         return 0;
     }
@@ -83,5 +102,6 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     uint32_t ef_search_;
     float m_l_;
     float alpha_;
+    size_t num_threads_;
     std::unique_ptr<ANN::HNSW<desc>> index_;
 };

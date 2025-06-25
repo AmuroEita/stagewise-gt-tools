@@ -3,6 +3,7 @@ package main
 import (
 	"ANN-CC-bench/bench/internal"
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -41,6 +42,7 @@ type Stat struct {
 type Index interface {
 	BatchInsert(data [][]float32, tags []uint32) error
 	BatchSearch(queries [][]float32, recallAt, Ls uint) ([][]uint32, error)
+	Build(data [][]float32, tags []uint32) error
 }
 
 type Bench struct {
@@ -66,7 +68,7 @@ func ConcurrentBench(index Index, config Config) *Bench {
 		index:           index,
 		insertLatencies: make([]float64, 0),
 		searchLatencies: make([]float64, 0),
-		rateLimiter:     rate.NewLimiter(rate.Limit(config.Workload.InputRate), int(config.Workload.InputRate)),
+		rateLimiter:     rate.NewLimiter(rate.Limit(config.Workload.InputRate*float64(config.Workload.NumThreads)), int(config.Workload.InputRate*float64(config.Workload.NumThreads))),
 		config:          &config,
 	}
 }
@@ -340,7 +342,10 @@ func loadConfig(filename string) (*Config, error) {
 }
 
 func main() {
-	config, err := loadConfig("config/config.yaml")
+	configPath := flag.String("config", "config/config.yaml", "配置文件路径")
+	flag.Parse()
+
+	config, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		return
@@ -382,6 +387,15 @@ func main() {
 			DataType:    internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeParlayHNSW, params)
+	case "parlayvamana":
+		params := internal.IndexParams{
+			Dim:         dataDim,
+			MaxElements: config.Data.MaxElements,
+			M:           config.Index.M,
+			Lb:          config.Index.Lb,
+			DataType:    internal.DataTypeFloat,
+		}
+		index = internal.NewIndex(internal.IndexTypeParlayVamana, params)
 	default:
 		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
 		return
@@ -397,7 +411,12 @@ func main() {
 			preData = append(preData, data[start:end])
 			preTags = append(preTags, uint32(i))
 		}
-		if err := index.BatchInsert(preData, preTags); err != nil {
+		fmt.Println("Begin data len:", len(preData))
+		fmt.Println("Begin tags len:", len(preTags))
+		if len(preData) > 0 {
+			fmt.Println("Dim:", len(preData[0]))
+		}
+		if err := index.Build(preData, preTags); err != nil {
 			fmt.Printf("Warn start error: %v\n", err)
 			return
 		}

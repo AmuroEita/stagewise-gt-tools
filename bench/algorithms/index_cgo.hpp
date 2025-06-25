@@ -10,7 +10,8 @@ extern "C" {
 typedef enum {
     INDEX_TYPE_HNSW = 0,
     INDEX_TYPE_PARLAYHNSW = 1,
-    INDEX_TYPE_CCHNSW = 2,
+    INDEX_TYPE_PARLAYVAMANA = 2,
+    INDEX_TYPE_CCHNSW = 3,
 } IndexType;
 
 typedef enum {
@@ -25,6 +26,7 @@ typedef struct {
     size_t M;
     size_t Lb;
     DataType data_type;
+    size_t num_threads;
 } IndexParams;
 
 void* create_index(IndexType type, IndexParams params);

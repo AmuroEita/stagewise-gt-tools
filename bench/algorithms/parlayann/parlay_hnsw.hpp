@@ -64,16 +64,14 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, uint32_t Ls,
                      size_t num_queries, TagT** batch_results) override {
-        
         size_t beam_width = 10;
         float alpha = 1.35;
         size_t visit_limit = 1000;
-        
+
         QueryParams QP(knn, beam_width, alpha, visit_limit,
                        std::min<int>(index_->max_degree(), 3 * visit_limit));
-        
+
         Range qpoints(batch_queries, num_queries, dim_);
-        
     }
 
     int search_with_tags(const T* query, size_t k, size_t Ls,

@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,13 +33,12 @@ typedef struct {
 void* create_index(IndexType type, IndexParams params);
 void destroy_index();
 
-int build_index(float* data, size_t num_points, uint32_t* tags);
-int insert_point(float* point, uint32_t tag);
+int build(float* data, uint32_t* tags, size_t num_points);
+int insert(float* point, uint32_t tag);
 void set_query_params(size_t Ls);
 int search_with_tags(float* query, size_t k, size_t Ls, uint32_t* res_tags);
 int batch_insert(float* batch_data, uint32_t* batch_tags, size_t batch_size);
-int batch_search(float** batch_queries, size_t num_queries, uint32_t k,
-                 uint32_t Ls, uint32_t** batch_results);
+int batch_search(float* batch_queries, uint32_t k, uint32_t Ls, size_t num_queries, uint32_t** batch_results);
 
 #ifdef __cplusplus
 }

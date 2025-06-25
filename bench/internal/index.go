@@ -69,7 +69,7 @@ func (i *Index) Build(data [][]float32, tags []uint32) error {
 	for j, vec := range data {
 		copy(flatData[j*dim:], vec)
 	}
-	result := C.build_index(
+	result := C.build(
 		(*C.float)(&flatData[0]),
 		C.size_t(len(tags)),
 		(*C.uint32_t)(&tags[0]),
@@ -80,12 +80,12 @@ func (i *Index) Build(data [][]float32, tags []uint32) error {
 	return nil
 }
 
-func (i *Index) InsertPoint(point []float32, tag uint32) error {
+func (i *Index) Insert(point []float32, tag uint32) error {
 	if len(point) == 0 {
 		return nil
 	}
 
-	result := C.insert_point(
+	result := C.insert(
 		(*C.float)(&point[0]),
 		C.uint32_t(tag),
 	)

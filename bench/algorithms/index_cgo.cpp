@@ -48,20 +48,19 @@ void destroy_index() {
     }
 }
 
-int build_index(float* data, size_t num_points, uint32_t* tags) {
-    std::cout << "[build_index] num_points: " << num_points
+int build(float* data, uint32_t* tags, size_t num_points) {
+    std::cout << "[build] num_points: " << num_points
               << ", g_dim: " << g_dim << std::endl;
     if (!g_index || !data || !tags) return -1;
 
-    std::vector<uint32_t> tags_vec(tags, tags + num_points);
-    g_index->build(data, num_points, tags_vec);
+    g_index->build(data, tags, num_points);
     return 0;
 }
 
-int insert_point(float* point, uint32_t tag) {
+int insert(float* point, uint32_t tag) {
     if (!g_index || !point) return -1;
 
-    return g_index->insert_point(point, tag);
+    return g_index->insert(point, tag);
 }
 
 void set_query_params(size_t Ls) {
@@ -84,30 +83,13 @@ int search_with_tags(float* query, size_t k, size_t Ls, uint32_t* res_tags) {
 
 int batch_insert(float* batch_data, uint32_t* batch_tags, size_t batch_size) {
     if (!g_index || !batch_data || !batch_tags) return -1;
-    std::vector<float*> data_ptrs(batch_size);
-    for (size_t i = 0; i < batch_size; ++i) {
-        data_ptrs[i] = batch_data + i * g_dim;
-    }
-    std::vector<uint32_t> tags_vec(batch_tags, batch_tags + batch_size);
-    return g_index->batch_insert(data_ptrs, tags_vec);
+    return g_index->batch_insert(batch_data, batch_tags, batch_size);
 }
 
-int batch_search(float** batch_queries, size_t num_queries, uint32_t k,
-                 uint32_t Ls, uint32_t** batch_results) {
-    if (!g_index || !batch_queries || !batch_results) return -1;
-
-    std::vector<float*> queries_vec(batch_queries, batch_queries + num_queries);
-    std::vector<std::vector<uint32_t>> results;
-
-    g_index->batch_search(queries_vec, k, Ls, results);
-
-    for (size_t i = 0; i < results.size(); ++i) {
-        batch_results[i] = new uint32_t[k];
-        for (size_t j = 0; j < results[i].size(); ++j) {
-            batch_results[i][j] = results[i][j];
-        }
-    }
-    return 0;
+int batch_search(float* batch_queries, uint32_t k,
+                 uint32_t Ls, size_t num_queries, uint32_t** batch_results) {
+    if (!g_index || !batch_queries) return -1;
+    return g_index->batch_search(batch_queries, k, Ls, num_queries, batch_results);
 }
 
 }  // extern "C"

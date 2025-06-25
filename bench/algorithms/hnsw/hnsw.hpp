@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <chrono>
 
 #include "../index.hpp"
 #include "hnswlib/hnswlib/hnswlib.h"
@@ -10,55 +11,76 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
    public:
     HNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
          size_t num_threads)
-        : dim(dim), space(dim), num_threads_(num_threads) {
-        index = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
+        : dim_(dim), num_threads_(num_threads), space(dim) {
+        index_ = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
                                                 ef_construction);
     }
 
-    void build(T *data, size_t num_points, std::vector<TagT> &tags) {
+    void build(const T* data, const TagT* tags, size_t num_points) override {
         for (size_t i = 0; i < num_points; i++) {
-            index->addPoint(data + i * dim, tags[i]);
+            index_->addPoint(data + i * dim_, tags[i]);
         }
     }
 
-    int insert_point(T *data, const TagT &tag) override {
-        index->addPoint(data, tag);
+    int insert(const T *data, const TagT tag) override {
+        index_->addPoint(data, tag);
         return 0;
     }
 
-    int batch_insert(const std::vector<T *> &batch_data,
-                     const std::vector<TagT> &batch_tags) override {
-        if (batch_data.size() != batch_tags.size()) {
-            return -1;
-        }
+    int batch_insert(const T* batch_data, const TagT* batch_tags, size_t num_points) override {
         int success_count = 0;
 #pragma omp parallel for reduction(+ : success_count) num_threads(num_threads_)
-        for (size_t i = 0; i < batch_data.size(); ++i) {
-            index->addPoint(batch_data[i], batch_tags[i]);
+        for (size_t i = 0; i < num_points; ++i) {
+            index_->addPoint(batch_data + i * dim_, batch_tags[i]);
             success_count++;
         }
-        return success_count == batch_data.size() ? 0 : -1;
+        return success_count == num_points ? 0 : -1;
     }
 
-    void set_query_params(const size_t Ls) override { index->setEf(Ls); }
+    void set_query_params(size_t Ls) override { index_->setEf(Ls); }
 
-    void search_with_tags(const T *query, size_t k, size_t Ls,
-                          std::vector<TagT> &result_tags) override {
+    int batch_search(const T* batch_queries, uint32_t k,
+                     uint32_t Ls, size_t num_queries, TagT** batch_results) override {
         if (!is_ef_set) {
-            index->setEf(Ls);
+            index_->setEf(Ls);
             is_ef_set = true;
         }
+        
+        std::vector<std::vector<TagT>> results(num_queries);
 
-        auto result = index->searchKnn(query, k);
+        this->search_latencies.resize(num_queries, 0.0);
+#pragma omp parallel for num_threads(num_threads_)
+        for (size_t i = 0; i < num_queries; ++i) {
+            results[i].reserve(k);
+            auto start = std::chrono::high_resolution_clock::now();
+            search_with_tags(batch_queries + i * dim_, k, Ls, results[i]);
+            auto end = std::chrono::high_resolution_clock::now();
+            this->search_latencies[i] =
+                std::chrono::duration<double, std::micro>(end - start).count();
+        }
+
+        for (size_t i = 0; i < num_queries; ++i) {
+            for (size_t j = 0; j < k; ++j) {
+                batch_results[i][j] = results[i][j];
+            }
+        }
+        return 0;
+    }
+
+    int search_with_tags(const T *query, size_t k, size_t Ls,
+                          std::vector<TagT> &result_tags) override {
+        auto result = index_->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);
             result.pop();
         }
+
+        return 0;
     }
 
     size_t num_threads_ = 1;
-    size_t dim;
+    size_t dim_;
     hnswlib::L2Space space;
-    hnswlib::HierarchicalNSW<T> *index;
+    hnswlib::HierarchicalNSW<T> *index_;
     bool is_ef_set = false;
 };

@@ -87,7 +87,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     int search_with_tags(const T *query, size_t k, size_t Ls,
                           std::vector<TagT> &result_tags) override {
 
-        // TODO:
+        parlayANN::QueryParams params(k, beam_width, 1.35, -1,
+                       std::min<int>(G.max_degree(), 3 * visit_limit));
 
         return 0;
     }

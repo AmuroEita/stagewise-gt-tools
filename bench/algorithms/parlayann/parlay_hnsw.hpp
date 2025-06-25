@@ -1,16 +1,16 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <iostream>
 #include <memory>
 #include <vector>
-#include <chrono>
 
 #include "../index.hpp"
 #include "parlayann/algorithms/HNSW/HNSW.hpp"
-#include "parlayann/algorithms/utils/types.h"
 #include "parlayann/algorithms/utils/euclidian_point.h"
 #include "parlayann/algorithms/utils/point_range.h"
+#include "parlayann/algorithms/utils/types.h"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
@@ -31,8 +31,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
         Range points(data, num_points, dim_);
-        auto ps = parlay::delayed_seq<Point>(points.size(),
-            [&](size_t i) { return points[i]; });
+        auto ps = parlay::delayed_seq<Point>(
+            points.size(), [&](size_t i) { return points[i]; });
 
         std::cout << "[build] start building HNSW index..." << std::endl;
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
@@ -41,31 +41,29 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         std::cout << "[build] finished building HNSW index." << std::endl;
     }
 
-    int batch_insert(const T* batch_data, const TagT* batch_tags, size_t num_points) override {
+    int batch_insert(const T* batch_data, const TagT* batch_tags,
+                     size_t num_points) override {
         if (!index_) return -1;
         uint32_t start_id = *batch_tags;
 
         Range points(batch_data, num_points, dim_);
-        auto ps = parlay::delayed_seq<Point>(points.size(),
-            [&](size_t i) { return points[i]; });
+        auto ps = parlay::delayed_seq<Point>(
+            points.size(), [&](size_t i) { return points[i]; });
 
         index_->batch_insert(ps.begin(), ps.end(), start_id);
         return 0;
     }
 
-    int insert(const T *point, const TagT tag) override {
+    int insert(const T* point, const TagT tag) override {
         std::cerr << "ParlayHNSW does not support dynamic single insertion"
                   << std::endl;
         return -1;
     }
 
-    void set_query_params(size_t Ls) override {
-        ef_search_ = Ls;
-    }
+    void set_query_params(size_t Ls) override { ef_search_ = Ls; }
 
-    int batch_search(const T* batch_queries, uint32_t k,
-                      uint32_t Ls, size_t num_queries,
-                      TagT** batch_results) override {
+    int batch_search(const T* batch_queries, uint32_t k, uint32_t Ls,
+                     size_t num_queries, TagT** batch_results) override {
         std::vector<std::vector<TagT>> results(num_queries);
 
         this->search_latencies.resize(num_queries, 0.0);

@@ -1,9 +1,10 @@
 #include "index_cgo.hpp"
+
 #include <vector>
 
-#include "parlayann/parlay_hnsw.hpp"
 #include "hnsw/hnsw.hpp"
 #include "index.hpp"
+#include "parlayann/parlay_hnsw.hpp"
 
 extern "C" {
 
@@ -19,19 +20,21 @@ void* create_index(IndexType type, IndexParams params) {
     switch (type) {
         case INDEX_TYPE_HNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                g_index = new HNSW<float>(params.dim, params.max_elements,
-                                          params.M, params.Lb, params.num_threads);
+                g_index =
+                    new HNSW<float>(params.dim, params.max_elements, params.M,
+                                    params.Lb, params.num_threads);
                 return g_index;
             }
             return nullptr;
         case INDEX_TYPE_PARLAYHNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
                 g_index = new ParlayHNSW<float>(params.dim, params.max_elements,
-                                          params.M, params.Lb, 1.15f, 1.15f, params.num_threads);
+                                                params.M, params.Lb, 1.15f,
+                                                1.15f, params.num_threads);
                 return g_index;
             }
             return nullptr;
-        
+
         default:
             return nullptr;
     }
@@ -46,7 +49,8 @@ void destroy_index() {
 }
 
 int build_index(float* data, size_t num_points, uint32_t* tags) {
-    std::cout << "[build_index] num_points: " << num_points << ", g_dim: " << g_dim << std::endl;
+    std::cout << "[build_index] num_points: " << num_points
+              << ", g_dim: " << g_dim << std::endl;
     if (!g_index || !data || !tags) return -1;
 
     std::vector<uint32_t> tags_vec(tags, tags + num_points);

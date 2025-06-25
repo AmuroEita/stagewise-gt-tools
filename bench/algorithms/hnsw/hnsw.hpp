@@ -1,13 +1,15 @@
 #pragma once
 
 #include <cstddef>
+
 #include "../index.hpp"
 #include "hnswlib/hnswlib/hnswlib.h"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {
    public:
-    HNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction, size_t num_threads)
+    HNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
+         size_t num_threads)
         : dim(dim), space(dim), num_threads_(num_threads) {
         index = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
                                                 ef_construction);
@@ -27,7 +29,7 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     int batch_insert(const std::vector<T *> &batch_data,
                      const std::vector<TagT> &batch_tags) override {
         if (batch_data.size() != batch_tags.size()) {
-            return -1; 
+            return -1;
         }
         int success_count = 0;
 #pragma omp parallel for reduction(+ : success_count) num_threads(num_threads_)

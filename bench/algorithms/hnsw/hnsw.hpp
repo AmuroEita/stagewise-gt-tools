@@ -75,6 +75,10 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
+    void print_dim() {
+        std::cout << "dim: " << dim_ << std::endl;
+    }
+
     size_t num_threads_ = 1;
     size_t dim_;
     hnswlib::L2Space space;

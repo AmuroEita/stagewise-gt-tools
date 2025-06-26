@@ -4,6 +4,8 @@ project(ANN-CC-bench)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_BUILD_TYPE Debug)
+
 add_subdirectory(algorithms/hnsw/hnswlib hnswlib)
 add_subdirectory(algorithms/parlayann/parlayann parlayann)
 

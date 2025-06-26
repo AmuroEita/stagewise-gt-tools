@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <mutex>
 
 #include "../index.hpp"
 #include "parlayann/algorithms/HNSW/HNSW.hpp"
@@ -48,32 +49,26 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
                                                    ef_construction_, alpha_);
     }
 
+    std::mutex index_mutex;
+
     int batch_insert(const T* batch_data, const TagT* batch_tags,
                      size_t num_points) override {
-        if (!index_) return -1;
-        if (total_points_ + num_points > max_elements_) {
-            std::cerr << "Error: Cannot insert " << num_points
-                      << " points, would exceed max_elements " << max_elements_
-                      << std::endl;
-            return -1;
-        }
+        std::lock_guard<std::mutex> lock(index_mutex);
 
-        uint32_t start_id = *batch_tags;
-        size_t offset = total_points_ * dim_;
+        printf("total_points_=%zu, num_points=%zu, max_elements=%zu\n", total_points_, num_points, max_elements_);
+        assert((total_points_ + num_points) <= max_elements_);
+        printf("写入区间: [%zu, %zu)\n", total_points_ * dim_, (total_points_ + num_points) * dim_);
+
         for (size_t i = 0; i < num_points * dim_; ++i) {
-            data_[offset + i] = batch_data[i];
+            data_[total_points_ * dim_ + i] = batch_data[i];
         }
-
-        size_t old_total_points = total_points_;
-        total_points_ += num_points;
-
-        Range points_range(data_.data(), total_points_, dim_);
-
+        Range points(data_.data() + total_points_ * dim_, num_points, dim_);
         auto ps = parlay::delayed_seq<Point>(num_points, [&](size_t i) {
-            return points_range[old_total_points + i];
+            return points[i];
         });
-
-        index_->batch_insert(ps.begin(), ps.end(), start_id);
+        total_points_ += num_points;
+        printf("batch_tags[0]=%u\n", batch_tags[0]);
+        index_->batch_insert(ps.begin(), ps.end(), batch_tags[0]);
         return 0;
     }
 
@@ -122,6 +117,10 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             }
         });
         return 0;
+    }
+
+    void print_dim() {
+        std::cout << "dim: " << dim_ << std::endl; 
     }
 
    private:

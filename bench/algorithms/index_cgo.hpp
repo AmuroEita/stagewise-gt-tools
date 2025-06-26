@@ -3,8 +3,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <cstdint>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,16 +29,22 @@ typedef struct {
     size_t num_threads;
 } IndexParams;
 
-void* create_index(IndexType type, IndexParams params);
-void destroy_index();
+typedef struct {
+    size_t Ls;
+    size_t beam_width;
+    float alpha;
+    size_t visit_limit;
+} C_QParams;
 
-int build(float* data, uint32_t* tags, size_t num_points);
-int insert(float* point, uint32_t tag);
-void set_query_params(size_t Ls);
-int search_with_tags(float* query, size_t k, size_t Ls, uint32_t* res_tags);
-int batch_insert(float* batch_data, uint32_t* batch_tags, size_t batch_size);
-int batch_search(float* batch_queries, uint32_t k, uint32_t Ls,
-                 size_t num_queries, uint32_t** batch_results);
+void* create_index(IndexType type, IndexParams params);
+void destroy_index(void* index_ptr);
+
+int build(void* index_ptr, float* data, uint32_t* tags, size_t num_points);
+int insert(void* index_ptr, float* point, uint32_t tag);
+void set_query_params(void* index_ptr, C_QParams params);
+int search(void* index_ptr, float* query, size_t k, C_QParams params, uint32_t* res_tags);
+int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags, size_t batch_size);
+int batch_search(void* index_ptr, float* batch_queries, uint32_t k, C_QParams params, size_t num_queries, uint32_t** batch_results);
 
 #ifdef __cplusplus
 }

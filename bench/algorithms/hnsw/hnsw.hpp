@@ -38,44 +38,38 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         return success_count == num_points ? 0 : -1;
     }
 
-    void set_query_params(size_t Ls) override { index_->setEf(Ls); }
-
-    int batch_search(const T* batch_queries, uint32_t k, uint32_t Ls,
-                     size_t num_queries, TagT** batch_results) override {
-        if (!is_ef_set) {
-            index_->setEf(Ls);
-            is_ef_set = true;
-        }
-
-        std::vector<std::vector<TagT>> results(num_queries);
-
-        this->search_latencies.resize(num_queries, 0.0);
-#pragma omp parallel for num_threads(num_threads_)
-        for (size_t i = 0; i < num_queries; ++i) {
-            results[i].reserve(k);
-            auto start = std::chrono::high_resolution_clock::now();
-            search_with_tags(batch_queries + i * dim_, k, Ls, results[i]);
-            auto end = std::chrono::high_resolution_clock::now();
-            this->search_latencies[i] =
-                std::chrono::duration<double, std::micro>(end - start).count();
-        }
-
-        for (size_t i = 0; i < num_queries; ++i) {
-            for (size_t j = 0; j < k; ++j) {
-                batch_results[i][j] = results[i][j];
-            }
-        }
-        return 0;
+    void set_query_params(const QParams& params) override {
+        query_params_ = params;
+        index_->setEf(params.Ls);
     }
 
-    int search_with_tags(const T* query, size_t k, size_t Ls,
-                         std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k, const QParams& params, std::vector<TagT>& result_tags) override {
+        index_->setEf(params.Ls);
         auto result = index_->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);
             result.pop();
         }
+        return 0;
+    }
 
+    int batch_search(const T* batch_queries, uint32_t k, size_t num_queries, TagT** batch_results) override {
+        index_->setEf(query_params_.Ls);
+
+#pragma omp parallel for num_threads(num_threads_)
+        for (size_t i = 0; i < num_queries; ++i) {
+            auto result = index_->searchKnn(batch_queries + i * dim_, k);
+            size_t j = 0;
+            std::vector<TagT> results;
+            while (!result.empty()) {
+                results.push_back(result.top().second);
+                result.pop();
+            }
+            std::reverse(results.begin(), results.end());
+            for (j = 0; j < results.size(); ++j) {
+                batch_results[i][j] = results[j];
+            }
+        }
         return 0;
     }
 
@@ -83,5 +77,5 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     size_t dim_;
     hnswlib::L2Space space;
     hnswlib::HierarchicalNSW<T>* index_;
-    bool is_ef_set = false;
+    QParams query_params_;
 };

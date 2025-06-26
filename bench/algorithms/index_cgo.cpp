@@ -8,89 +8,80 @@
 
 extern "C" {
 
-static IndexBase<float>* g_index = nullptr;
-static size_t g_dim = 0;
-
 void* create_index(IndexType type, IndexParams params) {
-    if (g_index) {
-        delete g_index;
-    }
-    g_dim = params.dim;
-
+    IndexBase<float>* index = nullptr;
     switch (type) {
         case INDEX_TYPE_HNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                g_index =
+                index =
                     new HNSW<float>(params.dim, params.max_elements, params.M,
                                     params.Lb, params.num_threads);
-                return g_index;
             }
-            return nullptr;
+            break;
         case INDEX_TYPE_PARLAYHNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                g_index = new ParlayHNSW<float>(params.dim, params.max_elements,
+                index = new ParlayHNSW<float>(params.dim, params.max_elements,
                                                 params.M, params.Lb, 1.15f,
                                                 1.15f, params.num_threads);
-                return g_index;
             }
-            return nullptr;
+            break;
 
         default:
             return nullptr;
     }
+    return static_cast<void*>(index);
 }
 
-void destroy_index() {
-    if (g_index) {
-        delete g_index;
-        g_index = nullptr;
-        g_dim = 0;
+void destroy_index(void* index_ptr) {
+    if (index_ptr) {
+        delete static_cast<IndexBase<float>*>(index_ptr);
     }
 }
 
-int build(float* data, uint32_t* tags, size_t num_points) {
-    std::cout << "[build] num_points: " << num_points << ", g_dim: " << g_dim
-              << std::endl;
-    if (!g_index || !data || !tags) return -1;
-
-    g_index->build(data, tags, num_points);
+int build(void* index_ptr, float* data, uint32_t* tags, size_t num_points) {
+    if (!index_ptr || !data || !tags) return -1;
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
+    index->build(data, tags, num_points);
     return 0;
 }
 
-int insert(float* point, uint32_t tag) {
-    if (!g_index || !point) return -1;
-
-    return g_index->insert(point, tag);
+int insert(void* index_ptr, float* point, uint32_t tag) {
+    if (!index_ptr || !point) return -1;
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
+    return index->insert(point, tag);
 }
 
-void set_query_params(size_t Ls) {
-    if (!g_index) return;
-
-    g_index->set_query_params(Ls);
+void set_query_params(void* index_ptr, C_QParams params) {
+    if (!index_ptr) return;
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
+    QParams qparams(params.Ls, params.beam_width, params.alpha, params.visit_limit);
+    index->set_query_params(qparams);
 }
 
-int search_with_tags(float* query, size_t k, size_t Ls, uint32_t* res_tags) {
-    if (!g_index || !query || !res_tags) return -1;
-
+int search(void* index_ptr, float* query, size_t k, C_QParams params, uint32_t* res_tags) {
+    if (!index_ptr || !query || !res_tags) return -1;
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
     std::vector<uint32_t> results;
-    g_index->search_with_tags(query, k, Ls, results);
-
+    QParams qparams(params.Ls, params.beam_width, params.alpha, params.visit_limit);
+    index->search(query, k, qparams, results);
     for (size_t i = 0; i < results.size(); ++i) {
         res_tags[i] = results[i];
     }
     return 0;
 }
 
-int batch_insert(float* batch_data, uint32_t* batch_tags, size_t batch_size) {
-    if (!g_index || !batch_data || !batch_tags) return -1;
-    return g_index->batch_insert(batch_data, batch_tags, batch_size);
+int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags, size_t batch_size) {
+    if (!index_ptr || !batch_data || !batch_tags) return -1;
+    std::cout << "test 1\n";
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
+    return index->batch_insert(batch_data, batch_tags, batch_size);
 }
 
-int batch_search(float* batch_queries, uint32_t k, uint32_t Ls,
-                 size_t num_queries, uint32_t** batch_results) {
-    if (!g_index || !batch_queries) return -1;
-    return g_index->batch_search(batch_queries, k, Ls, num_queries,
-                                 batch_results);
+int batch_search(void* index_ptr, float* batch_queries, uint32_t k, C_QParams params, size_t num_queries, uint32_t** batch_results) {
+    if (!index_ptr || !batch_queries) return -1;
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
+    QParams qparams(params.Ls, params.beam_width, params.alpha, params.visit_limit);
+    return index->batch_search(batch_queries, k, num_queries, batch_results);
 }
 
 }  // extern "C"

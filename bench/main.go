@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"sync"
@@ -189,9 +190,11 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 				start := time.Now()
 				switch task.Type {
 				case InsertTask:
+					fmt.Println("xxxxx1.")
 					if b.config.Workload.EnforceConsistency {
 						b.rwMu.Lock()
 					}
+					fmt.Println("xxxxx2.")
 					err := b.index.BatchInsert(task.Data, task.Tags)
 					if b.config.Workload.EnforceConsistency {
 						b.rwMu.Unlock()
@@ -397,8 +400,7 @@ func main() {
 		}
 		index = internal.NewIndex(internal.IndexTypeParlayVamana, params)
 	default:
-		fmt.Printf("Unsupported index type: %s\n", config.Index.IndexType)
-		return
+		log.Fatalf("Unsupported index type: %s\n", config.Index.IndexType)
 	}
 
 	beginNum := config.Data.BeginNum

@@ -42,9 +42,13 @@ void destroy_index(void* index_ptr);
 int build(void* index_ptr, float* data, uint32_t* tags, size_t num_points);
 int insert(void* index_ptr, float* point, uint32_t tag);
 void set_query_params(void* index_ptr, C_QParams params);
-int search(void* index_ptr, float* query, size_t k, C_QParams params, uint32_t* res_tags);
-int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags, size_t batch_size);
-int batch_search(void* index_ptr, float* batch_queries, uint32_t k, C_QParams params, size_t num_queries, uint32_t** batch_results);
+int search(void* index_ptr, float* query, size_t k, C_QParams params,
+           uint32_t* res_tags);
+int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
+                 size_t batch_size);
+int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
+                 C_QParams params, size_t num_queries,
+                 uint32_t** batch_results);
 
 #ifdef __cplusplus
 }

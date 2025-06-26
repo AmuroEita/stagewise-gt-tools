@@ -38,7 +38,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             data_[i] = data[i];
         }
         total_points_ = num_points;
-        
+
         Range points_range(data_.data(), total_points_, dim_);
         auto ps = parlay::delayed_seq<Point>(
             total_points_, [&](size_t i) { return points_range[i]; });
@@ -52,26 +52,26 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
                      size_t num_points) override {
         if (!index_) return -1;
         if (total_points_ + num_points > max_elements_) {
-            std::cerr << "Error: Cannot insert " << num_points 
-                      << " points, would exceed max_elements " << max_elements_ << std::endl;
+            std::cerr << "Error: Cannot insert " << num_points
+                      << " points, would exceed max_elements " << max_elements_
+                      << std::endl;
             return -1;
         }
-        
+
         uint32_t start_id = *batch_tags;
         size_t offset = total_points_ * dim_;
         for (size_t i = 0; i < num_points * dim_; ++i) {
             data_[offset + i] = batch_data[i];
         }
-        
+
         size_t old_total_points = total_points_;
         total_points_ += num_points;
 
         Range points_range(data_.data(), total_points_, dim_);
-        
-        auto ps = parlay::delayed_seq<Point>(
-            num_points, [&](size_t i) { 
-                return points_range[old_total_points + i]; 
-            });
+
+        auto ps = parlay::delayed_seq<Point>(num_points, [&](size_t i) {
+            return points_range[old_total_points + i];
+        });
 
         index_->batch_insert(ps.begin(), ps.end(), start_id);
         return 0;
@@ -83,8 +83,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         return -1;
     }
 
-    void set_query_params(const QParams& params) override { 
-        query_params_ = params; 
+    void set_query_params(const QParams& params) override {
+        query_params_ = params;
     }
 
     int search(const T* query, size_t k, const QParams& params,
@@ -94,11 +94,13 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         return -1;
     }
 
-    int batch_search(const T* batch_queries, uint32_t k, 
-                     size_t num_queries, TagT** batch_results) override {
-        parlayANN::QueryParams QP(k, query_params_.beam_width, query_params_.alpha, 
+    int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
+                     TagT** batch_results) override {
+        parlayANN::QueryParams QP(k, query_params_.beam_width,
+                                  query_params_.alpha,
                                   query_params_.visit_limit,
-                                  std::min<int>(index_->get_threshold_m(0), 3 * query_params_.visit_limit));
+                                  std::min<int>(index_->get_threshold_m(0),
+                                                3 * query_params_.visit_limit));
         Range qpoints(batch_queries, num_queries, dim_);
         parlay::sequence<TagT> starts(1, 0);
 
@@ -114,9 +116,9 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             auto q = qpoints[i];
             auto results = parlayANN::beam_search_impl<uint32_t>(
                 q, graph, points_range, starts, QP);
-            
+
             for (size_t j = 0; j < k && j < results.first.first.size(); ++j) {
-                batch_results[i][j] = results.first.first[j].first; 
+                batch_results[i][j] = results.first.first[j].first;
             }
         });
         return 0;
@@ -129,10 +131,10 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     float m_l_;
     float alpha_;
     size_t num_threads_;
-    size_t max_elements_;  
-    size_t total_points_;  
-    
+    size_t max_elements_;
+    size_t total_points_;
+
     std::unique_ptr<ANN::HNSW<desc>> index_;
-    std::vector<T> data_;  
-    QParams query_params_;  
+    std::vector<T> data_;
+    QParams query_params_;
 };

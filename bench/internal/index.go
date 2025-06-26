@@ -36,9 +36,9 @@ type IndexParams struct {
 }
 
 type QueryParams struct {
-	Ls        uint
-	BeamWidth uint
-	Alpha     float32
+	Ls         uint
+	BeamWidth  uint
+	Alpha      float32
 	VisitLimit uint
 }
 
@@ -106,9 +106,9 @@ func (i *Index) Insert(point []float32, tag uint32) error {
 
 func (i *Index) SetQueryParams(params QueryParams) {
 	cParams := C.C_QParams{
-		Ls:         C.size_t(params.Ls),
-		beam_width: C.size_t(params.BeamWidth),
-		alpha:      C.float(params.Alpha),
+		Ls:          C.size_t(params.Ls),
+		beam_width:  C.size_t(params.BeamWidth),
+		alpha:       C.float(params.Alpha),
 		visit_limit: C.size_t(params.VisitLimit),
 	}
 	C.set_query_params(i.ptr, cParams)
@@ -117,9 +117,9 @@ func (i *Index) SetQueryParams(params QueryParams) {
 func (i *Index) Search(query []float32, k uint, params QueryParams) ([]uint32, error) {
 	results := make([]uint32, k)
 	cParams := C.C_QParams{
-		Ls:         C.size_t(params.Ls),
-		beam_width: C.size_t(params.BeamWidth),
-		alpha:      C.float(params.Alpha),
+		Ls:          C.size_t(params.Ls),
+		beam_width:  C.size_t(params.BeamWidth),
+		alpha:       C.float(params.Alpha),
 		visit_limit: C.size_t(params.VisitLimit),
 	}
 	result := C.search(
@@ -193,9 +193,9 @@ func (i *Index) BatchSearch(queries [][]float32, k, Ls uint) ([][]uint32, error)
 	}
 
 	cParams := C.C_QParams{
-		Ls:         C.size_t(Ls),
-		beam_width: 0, 
-		alpha:      0,
+		Ls:          C.size_t(Ls),
+		beam_width:  0,
+		alpha:       0,
 		visit_limit: 0,
 	}
 

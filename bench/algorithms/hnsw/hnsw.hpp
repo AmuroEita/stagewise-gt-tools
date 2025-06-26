@@ -43,7 +43,8 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         index_->setEf(params.Ls);
     }
 
-    int search(const T* query, size_t k, const QParams& params, std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k, const QParams& params,
+               std::vector<TagT>& result_tags) override {
         index_->setEf(params.Ls);
         auto result = index_->searchKnn(query, k);
         while (!result.empty()) {
@@ -53,7 +54,8 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
-    int batch_search(const T* batch_queries, uint32_t k, size_t num_queries, TagT** batch_results) override {
+    int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
+                     TagT** batch_results) override {
         index_->setEf(query_params_.Ls);
 
 #pragma omp parallel for num_threads(num_threads_)

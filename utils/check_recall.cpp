@@ -132,8 +132,7 @@ float check_recall(std::vector<SearchResult<uint32_t>>& res,
         return 0.0f;
     }
 
-    float average_recall = total_recall / valid_entries *
-                           100.0f;  
+    float average_recall = total_recall / valid_entries * 100.0f;
     std::cout << "Detected " << ties_detected
               << " tie instances in ground truth" << std::endl;
 

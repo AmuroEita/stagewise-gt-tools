@@ -21,8 +21,8 @@ void* create_index(IndexType type, IndexParams params) {
         case INDEX_TYPE_PARLAYHNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
                 index = new ParlayHNSW<float>(params.dim, params.max_elements,
-                                                params.M, params.Lb, 1.15f,
-                                                1.15f, params.num_threads);
+                                              params.M, params.Lb, 1.15f, 1.15f,
+                                              params.num_threads);
             }
             break;
 
@@ -54,15 +54,18 @@ int insert(void* index_ptr, float* point, uint32_t tag) {
 void set_query_params(void* index_ptr, C_QParams params) {
     if (!index_ptr) return;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
-    QParams qparams(params.Ls, params.beam_width, params.alpha, params.visit_limit);
+    QParams qparams(params.Ls, params.beam_width, params.alpha,
+                    params.visit_limit);
     index->set_query_params(qparams);
 }
 
-int search(void* index_ptr, float* query, size_t k, C_QParams params, uint32_t* res_tags) {
+int search(void* index_ptr, float* query, size_t k, C_QParams params,
+           uint32_t* res_tags) {
     if (!index_ptr || !query || !res_tags) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
     std::vector<uint32_t> results;
-    QParams qparams(params.Ls, params.beam_width, params.alpha, params.visit_limit);
+    QParams qparams(params.Ls, params.beam_width, params.alpha,
+                    params.visit_limit);
     index->search(query, k, qparams, results);
     for (size_t i = 0; i < results.size(); ++i) {
         res_tags[i] = results[i];
@@ -70,17 +73,21 @@ int search(void* index_ptr, float* query, size_t k, C_QParams params, uint32_t* 
     return 0;
 }
 
-int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags, size_t batch_size) {
+int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
+                 size_t batch_size) {
     if (!index_ptr || !batch_data || !batch_tags) return -1;
     std::cout << "test 1\n";
     auto index = static_cast<IndexBase<float>*>(index_ptr);
     return index->batch_insert(batch_data, batch_tags, batch_size);
 }
 
-int batch_search(void* index_ptr, float* batch_queries, uint32_t k, C_QParams params, size_t num_queries, uint32_t** batch_results) {
+int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
+                 C_QParams params, size_t num_queries,
+                 uint32_t** batch_results) {
     if (!index_ptr || !batch_queries) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
-    QParams qparams(params.Ls, params.beam_width, params.alpha, params.visit_limit);
+    QParams qparams(params.Ls, params.beam_width, params.alpha,
+                    params.visit_limit);
     return index->batch_search(batch_queries, k, num_queries, batch_results);
 }
 

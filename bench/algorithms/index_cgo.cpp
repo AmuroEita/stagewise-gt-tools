@@ -1,7 +1,7 @@
 #include "index_cgo.hpp"
 
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include "hnsw/hnsw.hpp"
 #include "index.hpp"

@@ -4,8 +4,8 @@
 #include <cstddef>
 #include <iostream>
 #include <memory>
-#include <vector>
 #include <mutex>
+#include <vector>
 
 #include "../index.hpp"
 #include "parlayann/algorithms/HNSW/HNSW.hpp"
@@ -55,17 +55,18 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
                      size_t num_points) override {
         std::lock_guard<std::mutex> lock(index_mutex);
 
-        printf("total_points_=%zu, num_points=%zu, max_elements=%zu\n", total_points_, num_points, max_elements_);
+        printf("total_points_=%zu, num_points=%zu, max_elements=%zu\n",
+               total_points_, num_points, max_elements_);
         assert((total_points_ + num_points) <= max_elements_);
-        printf("写入区间: [%zu, %zu)\n", total_points_ * dim_, (total_points_ + num_points) * dim_);
+        printf("写入区间: [%zu, %zu)\n", total_points_ * dim_,
+               (total_points_ + num_points) * dim_);
 
         for (size_t i = 0; i < num_points * dim_; ++i) {
             data_[total_points_ * dim_ + i] = batch_data[i];
         }
         Range points(data_.data() + total_points_ * dim_, num_points, dim_);
-        auto ps = parlay::delayed_seq<Point>(num_points, [&](size_t i) {
-            return points[i];
-        });
+        auto ps = parlay::delayed_seq<Point>(
+            num_points, [&](size_t i) { return points[i]; });
         total_points_ += num_points;
         printf("batch_tags[0]=%u\n", batch_tags[0]);
         index_->batch_insert(ps.begin(), ps.end(), batch_tags[0]);
@@ -119,9 +120,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
-    void print_dim() {
-        std::cout << "dim: " << dim_ << std::endl; 
-    }
+    void print_dim() { std::cout << "dim: " << dim_ << std::endl; }
 
    private:
     size_t dim_;

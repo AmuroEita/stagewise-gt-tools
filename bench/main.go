@@ -184,7 +184,6 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 		b.wg.Add(1)
 		go func() {
 			defer b.wg.Done()
-			defer fmt.Println("A consumer goroutine exited")
 			for task := range b.taskQueue {
 				start := time.Now()
 				switch task.Type {
@@ -460,6 +459,7 @@ func main() {
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
 			Lb:          config.Index.Lb,
+			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeHNSW, params)
@@ -469,6 +469,7 @@ func main() {
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
 			Lb:          config.Index.Lb,
+			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeParlayHNSW, params)
@@ -478,6 +479,7 @@ func main() {
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
 			Lb:          config.Index.Lb,
+			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeParlayVamana, params)
@@ -500,6 +502,7 @@ func main() {
 			fmt.Printf("Warn start error: %v\n", err)
 			return
 		}
+		fmt.Println("Index Built")
 	}
 
 	var bench *Bench

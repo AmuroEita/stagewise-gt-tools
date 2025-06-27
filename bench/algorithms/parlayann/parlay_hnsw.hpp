@@ -32,7 +32,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
           max_elements_(max_elements),
           total_points_(0) {
         data_.resize(max_elements * dim_);
-        assert(data_.capacity() == data_.size());
+        setenv("PARLAY_NUM_THREADS", std::to_string(num_threads).c_str(), 1);
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {

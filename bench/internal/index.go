@@ -32,6 +32,7 @@ type IndexParams struct {
 	MaxElements uint64
 	M           int
 	Lb          int
+	Threads     int
 	DataType    DataType
 }
 
@@ -52,6 +53,7 @@ func NewIndex(indexType IndexType, params IndexParams) *Index {
 		max_elements: C.size_t(params.MaxElements),
 		M:            C.size_t(params.M),
 		Lb:           C.size_t(params.Lb),
+		num_threads:  C.size_t(params.Threads),
 	}
 	return &Index{
 		ptr: C.create_index(C.IndexType(indexType), cParams),

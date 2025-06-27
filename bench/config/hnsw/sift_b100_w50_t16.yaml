@@ -2,7 +2,7 @@ data:
   dataset_name: sift
   max_elements: 1000000
   begin_num: 5000
-  batch_size: 100
+  write_batch_size: 100000
   max_queries: 10000
   data_type: float
   data_path: ../data/sift/sift_base.bin
@@ -19,10 +19,10 @@ search:
 
 workload:
   write_ratio: 1
-  num_threads: 16
-  queue_size: 20000
+  num_threads: 64
+  queue_size: 100000
   query_new_data: false
-  input_rate: 1000
+  input_rate: 100000
   enforce_consistency: true
 
 result:

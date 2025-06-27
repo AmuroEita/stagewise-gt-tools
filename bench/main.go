@@ -63,6 +63,8 @@ type Bench struct {
 	searchResults   []*internal.SearchResult
 	resultsMu       sync.Mutex
 	config          *Config
+	insertPointCnt int
+	searchPointCnt int
 }
 
 func ConcurrentBench(index Index, config Config) *Bench {
@@ -78,6 +80,7 @@ func ConcurrentBench(index Index, config Config) *Bench {
 
 func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
 	defer close(b.taskQueue)
+	fmt.Println("ProduceTasks finished and closed taskQueue")
 	beginNum := config.Data.BeginNum
 	writeBatchSize := config.Data.WriteBatchSize
 	writeRatio := config.Workload.WriteRatio
@@ -94,23 +97,6 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 	queryIdx := 0
 	totalQueries := len(queries) / dim
 
-	bar := progressbar.NewOptions(
-		int(insertTotal-beginNum),
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionShowBytes(false),
-		progressbar.OptionSetWidth(50),
-		progressbar.OptionSetDescription("Insert: 0/s, Search: 0/s"),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]=[reset]",
-			SaucerHead:    "[green]>[reset]",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
-	)
-
-	startTime := time.Now()
-
 	for startInsertOffset < insertTotal || startSearchOffset < searchTotal {
 		endInsertOffset := min(startInsertOffset+writeBatchSize, insertTotal)
 		if endInsertOffset > startInsertOffset {
@@ -126,7 +112,6 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 				task.Tags = append(task.Tags, uint32(i))
 			}
 			b.taskQueue <- task
-			bar.Add(endInsertOffset - startInsertOffset)
 			startInsertOffset = endInsertOffset
 		}
 
@@ -160,32 +145,46 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 			continue
 		}
 
-		b.taskQueue <- Task{
-			Type:      SearchTask,
-			Data:      batchQueries,
-			Tags:      batchTags,
-			RecallAt:  config.Search.RecallAt,
-			Ls:        config.Search.Ls,
-			Timestamp: time.Now(),
-		}
-		startSearchOffset = endSearchOffset
-		b.searchCnt += len(batchQueries)
-		bar.Add(len(batchQueries))
-
-		elapsed := time.Since(startTime).Seconds()
-		if elapsed > 0 {
-			insertQPS := float64(b.insertCnt) / elapsed
-			searchQPS := float64(b.searchCnt) / elapsed
-			bar.Describe(fmt.Sprintf("Insert: %.0f/s, Search: %.0f/s", insertQPS, searchQPS))
+		if len(batchQueries) > 0 {
+			fmt.Printf("Search range: [%d, %d)\n", startSearchOffset, endSearchOffset)
+			b.taskQueue <- Task{
+				Type:      SearchTask,
+				Data:      batchQueries,
+				Tags:      batchTags,
+				RecallAt:  config.Search.RecallAt,
+				Ls:        config.Search.Ls,
+				Timestamp: time.Now(),
+			}
+			startSearchOffset = endSearchOffset
+			b.searchCnt += len(batchQueries)
 		}
 	}
 }
 
 func (b *Bench) ConsumeTasks(numWorkers int) {
+	totalInsert := int(b.config.Data.MaxElements) - b.config.Data.BeginNum
+	totalSearch := 0
+	bar := progressbar.NewOptions(
+		totalInsert+totalSearch,
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowBytes(false),
+		progressbar.OptionSetWidth(50),
+		progressbar.OptionSetDescription("Insert: 0/s, Search: 0/s"),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+	)
+	startTime := time.Now()
+
 	for i := 0; i < numWorkers; i++ {
 		b.wg.Add(1)
 		go func() {
 			defer b.wg.Done()
+			defer fmt.Println("A consumer goroutine exited")
 			for task := range b.taskQueue {
 				start := time.Now()
 				switch task.Type {
@@ -203,6 +202,8 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					}
 					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
 					b.insertCnt++
+					b.insertPointCnt += len(task.Data)
+					bar.Add(len(task.Data))
 				case SearchTask:
 					if b.config.Workload.EnforceConsistency {
 						b.rwMu.RLock()
@@ -227,6 +228,14 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					b.resultsMu.Unlock()
 					b.searchLatencies = append(b.searchLatencies, float64(time.Since(start).Microseconds()))
 					b.searchCnt++
+					b.searchPointCnt += len(task.Data)
+					bar.Add(len(task.Data))
+				}
+				elapsed := time.Since(startTime).Seconds()
+				if elapsed > 0 {
+					insertQPS := float64(b.insertPointCnt) / elapsed
+					searchQPS := float64(b.searchPointCnt) / elapsed
+					bar.Describe(fmt.Sprintf("Insert: %.0f/s, Search: %.0f/s", insertQPS, searchQPS))
 				}
 			}
 		}()
@@ -502,6 +511,7 @@ func main() {
 	bench.ConsumeTasks(config.Workload.NumThreads)
 
 	bench.wg.Wait()
+	fmt.Println("All workers finished")
 	elapsedSec := time.Since(start).Seconds()
 
 	bench.CollectStats(elapsedSec)
@@ -510,5 +520,4 @@ func main() {
 		fmt.Printf("Failed to write results to CSV: %v\n", err)
 	}
 }
-
 

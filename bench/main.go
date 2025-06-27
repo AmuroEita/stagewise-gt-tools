@@ -265,7 +265,7 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 
 	if !fileExists {
 		header := []string{
-			"algorithm", "threads", "batch_size", "write_ratio", 
+			"algorithm", "threads", "batch_size", "write_ratio",
 			"insert_p95_latency", "insert_p99_latency", "insert_mean_latency", "insert_qps",
 			"search_p95_latency", "search_p99_latency", "search_mean_latency", "search_qps",
 			"recall",
@@ -293,19 +293,19 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 	}
 
 	row := []string{
-		config.Index.IndexType,                                    // algorithm
-		fmt.Sprintf("%d", config.Workload.NumThreads),             // threads
-		fmt.Sprintf("%d", config.Data.WriteBatchSize),             // batch_size
-		fmt.Sprintf("%.2f", config.Workload.WriteRatio),           // write_ratio
-		fmt.Sprintf("%.2f", insertP95),                            // insert_p95_latency
-		fmt.Sprintf("%.2f", insertP99),                            // insert_p99_latency
-		fmt.Sprintf("%.2f", insertMean),                           // insert_mean_latency
-		fmt.Sprintf("%.2f", insertQPS),                            // insert_qps
-		fmt.Sprintf("%.2f", searchP95),                            // search_p95_latency
-		fmt.Sprintf("%.2f", searchP99),                            // search_p99_latency
-		fmt.Sprintf("%.2f", searchMean),                           // search_mean_latency
-		fmt.Sprintf("%.2f", searchQPS),                            // search_qps
-		fmt.Sprintf("0"),                               
+		config.Index.IndexType,                          // algorithm
+		fmt.Sprintf("%d", config.Workload.NumThreads),   // threads
+		fmt.Sprintf("%d", config.Data.WriteBatchSize),   // batch_size
+		fmt.Sprintf("%.2f", config.Workload.WriteRatio), // write_ratio
+		fmt.Sprintf("%.2f", insertP95),                  // insert_p95_latency
+		fmt.Sprintf("%.2f", insertP99),                  // insert_p99_latency
+		fmt.Sprintf("%.2f", insertMean),                 // insert_mean_latency
+		fmt.Sprintf("%.2f", insertQPS),                  // insert_qps
+		fmt.Sprintf("%.2f", searchP95),                  // search_p95_latency
+		fmt.Sprintf("%.2f", searchP99),                  // search_p99_latency
+		fmt.Sprintf("%.2f", searchMean),                 // search_mean_latency
+		fmt.Sprintf("%.2f", searchQPS),                  // search_qps
+		fmt.Sprintf("0"),
 	}
 
 	if err := writer.Write(row); err != nil {
@@ -387,7 +387,8 @@ type Config struct {
 	Index struct {
 		IndexType string `yaml:"index_type"`
 		M         int    `yaml:"m"`
-		Lb        int    `yaml:"lb"`	} `yaml:"index"`
+		Lb        int    `yaml:"lb"`
+	} `yaml:"index"`
 
 	Search struct {
 		RecallAt uint32 `yaml:"recall_at"`
@@ -515,9 +516,7 @@ func main() {
 	elapsedSec := time.Since(start).Seconds()
 
 	bench.CollectStats(elapsedSec)
-	
 	if err := bench.WriteResultsToCSV(elapsedSec, config); err != nil {
 		fmt.Printf("Failed to write results to CSV: %v\n", err)
 	}
 }
-

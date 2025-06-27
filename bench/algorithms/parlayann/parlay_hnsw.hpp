@@ -32,6 +32,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
           max_elements_(max_elements),
           total_points_(0) {
         data_.resize(max_elements * dim_);
+        assert(data_.capacity() == data_.size());
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
@@ -49,17 +50,12 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
                                                    ef_construction_, alpha_);
     }
 
-    std::mutex index_mutex;
-
     int batch_insert(const T* batch_data, const TagT* batch_tags,
                      size_t num_points) override {
         std::lock_guard<std::mutex> lock(index_mutex);
 
-        printf("total_points_=%zu, num_points=%zu, max_elements=%zu\n",
-               total_points_, num_points, max_elements_);
         assert((total_points_ + num_points) <= max_elements_);
-        printf("写入区间: [%zu, %zu)\n", total_points_ * dim_,
-               (total_points_ + num_points) * dim_);
+        // std::cout << "Insert batch size: " << num_points << std::endl; 
 
         for (size_t i = 0; i < num_points * dim_; ++i) {
             data_[total_points_ * dim_ + i] = batch_data[i];
@@ -68,7 +64,6 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         auto ps = parlay::delayed_seq<Point>(
             num_points, [&](size_t i) { return points[i]; });
         total_points_ += num_points;
-        printf("batch_tags[0]=%u\n", batch_tags[0]);
         index_->batch_insert(ps.begin(), ps.end(), batch_tags[0]);
         return 0;
     }
@@ -120,9 +115,9 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
-    void print_dim() { std::cout << "dim: " << dim_ << std::endl; }
-
    private:
+    std::mutex index_mutex;
+
     size_t dim_;
     uint32_t graph_degree_;  // M
     uint32_t ef_construction_;

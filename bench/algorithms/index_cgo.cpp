@@ -78,10 +78,6 @@ int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
                  size_t batch_size) {
     if (!index_ptr || !batch_data || !batch_tags) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
-    assert(batch_data != nullptr);
-    assert(batch_tags != nullptr);
-    std::cout << "batch_insert: batch_size=" << batch_size << std::endl;
-    index->print_dim();
     return index->batch_insert(batch_data, batch_tags, batch_size);
 }
 

@@ -150,14 +150,6 @@ func (i *Index) BatchInsert(batchData [][]float32, batchTags []uint32) error {
 		copy(flatData[j*dim:], vec)
 	}
 
-	fmt.Printf("BatchInsert: numPoints=%d, dim=%d, batchTags.len=%d\n", numPoints, dim, len(batchTags))
-	for i, vec := range batchData {
-		if len(vec) != dim {
-			fmt.Printf("数据维度不一致: index=%d, len=%d, 期望=%d\n", i, len(vec), dim)
-		}
-	}
-	fmt.Printf("flatData addr: %p, batchTags addr: %p\n", &flatData[0], &batchTags[0])
-
 	result := C.batch_insert(
 		i.ptr,
 		(*C.float)(&flatData[0]),

@@ -3,17 +3,19 @@ package main
 import (
 	"ANN-CC-bench/bench/internal"
 	"context"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/time/rate"
-	"gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v2"
 )
 
 type TaskType int
@@ -77,8 +79,9 @@ func ConcurrentBench(index Index, config Config) *Bench {
 func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
 	defer close(b.taskQueue)
 	beginNum := config.Data.BeginNum
+	writeBatchSize := config.Data.WriteBatchSize
 	writeRatio := config.Workload.WriteRatio
-	batchSize := config.Data.BatchSize
+	searchBatchSize := int(float64(writeBatchSize) * (1.0/writeRatio - 1.0))
 
 	insertTotal := len(data) / dim
 	searchTotal := config.Data.MaxQueries
@@ -109,10 +112,7 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 	startTime := time.Now()
 
 	for startInsertOffset < insertTotal || startSearchOffset < searchTotal {
-		insertBatchSize := int(float64(batchSize) * writeRatio)
-		searchBatchSize := batchSize - insertBatchSize
-
-		endInsertOffset := min(startInsertOffset+insertBatchSize, insertTotal)
+		endInsertOffset := min(startInsertOffset+writeBatchSize, insertTotal)
 		if endInsertOffset > startInsertOffset {
 			task := Task{
 				Type: InsertTask,
@@ -233,6 +233,80 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 	}
 }
 
+func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
+	if err := os.MkdirAll(config.Result.OutputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %v", err)
+	}
+
+	resultPath := filepath.Join(config.Result.OutputDir, "benchmark_results.csv")
+	
+	fileExists := false
+	if _, err := os.Stat(resultPath); err == nil {
+		fileExists = true
+	}
+
+	file, err := os.OpenFile(resultPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open result file: %v", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	if !fileExists {
+		header := []string{
+			"algorithm", "threads", "batch_size", "write_ratio", 
+			"insert_p95_latency", "insert_p99_latency", "insert_mean_latency", "insert_qps",
+			"search_p95_latency", "search_p99_latency", "search_mean_latency", "search_qps",
+			"recall",
+		}
+		if err := writer.Write(header); err != nil {
+			return fmt.Errorf("failed to write header: %v", err)
+		}
+	}
+
+	var insertP95, insertP99, insertMean, insertQPS float64
+	var searchP95, searchP99, searchMean, searchQPS float64
+
+	if b.insertCnt > 0 {
+		insertQPS = float64(b.insertCnt) / elapsedSec
+		insertMean = mean(b.insertLatencies)
+		insertP95 = percentile(b.insertLatencies, 0.95)
+		insertP99 = percentile(b.insertLatencies, 0.99)
+	}
+
+	if b.searchCnt > 0 {
+		searchQPS = float64(b.searchCnt) / elapsedSec
+		searchMean = mean(b.searchLatencies)
+		searchP95 = percentile(b.searchLatencies, 0.95)
+		searchP99 = percentile(b.searchLatencies, 0.99)
+	}
+
+	row := []string{
+		config.Index.IndexType,                                    // algorithm
+		fmt.Sprintf("%d", config.Workload.NumThreads),             // threads
+		fmt.Sprintf("%d", config.Data.WriteBatchSize),             // batch_size
+		fmt.Sprintf("%.2f", config.Workload.WriteRatio),           // write_ratio
+		fmt.Sprintf("%.2f", insertP95),                            // insert_p95_latency
+		fmt.Sprintf("%.2f", insertP99),                            // insert_p99_latency
+		fmt.Sprintf("%.2f", insertMean),                           // insert_mean_latency
+		fmt.Sprintf("%.2f", insertQPS),                            // insert_qps
+		fmt.Sprintf("%.2f", searchP95),                            // search_p95_latency
+		fmt.Sprintf("%.2f", searchP99),                            // search_p99_latency
+		fmt.Sprintf("%.2f", searchMean),                           // search_mean_latency
+		fmt.Sprintf("%.2f", searchQPS),                            // search_qps
+		fmt.Sprintf("0"),                               
+	}
+
+	if err := writer.Write(row); err != nil {
+		return fmt.Errorf("failed to write data row: %v", err)
+	}
+
+	fmt.Printf("Results written to: %s\n", resultPath)
+	return nil
+}
+
 func (b *Bench) CollectStats(elapsedSec float64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -290,21 +364,21 @@ func percentile(values []float64, p float64) float64 {
 
 type Config struct {
 	Data struct {
-		DatasetName string `yaml:"dataset_name"`
-		MaxElements uint64 `yaml:"max_elements"`
-		BeginNum    int    `yaml:"begin_num"`
-		BatchSize   int    `yaml:"batch_size"`
-		MaxQueries  int    `yaml:"max_queries"`
-		DataType    string `yaml:"data_type"`
-		DataPath    string `yaml:"data_path"`
-		QueryPath   string `yaml:"query_path"`
+		DatasetName    string `yaml:"dataset_name"`
+		MaxElements    uint64 `yaml:"max_elements"`
+		BeginNum       int    `yaml:"begin_num"`
+		BatchSize      int    `yaml:"batch_size"`
+		WriteBatchSize int    `yaml:"write_batch_size"`
+		MaxQueries     int    `yaml:"max_queries"`
+		DataType       string `yaml:"data_type"`
+		DataPath       string `yaml:"data_path"`
+		QueryPath      string `yaml:"query_path"`
 	} `yaml:"data"`
 
 	Index struct {
 		IndexType string `yaml:"index_type"`
 		M         int    `yaml:"m"`
-		Lb        int    `yaml:"lb"`
-	} `yaml:"index"`
+		Lb        int    `yaml:"lb"`	} `yaml:"index"`
 
 	Search struct {
 		RecallAt uint32 `yaml:"recall_at"`
@@ -343,7 +417,7 @@ func loadConfig(filename string) (*Config, error) {
 }
 
 func main() {
-	configPath := flag.String("config", "config/config.yaml", "配置文件路径")
+	configPath := flag.String("config", "config/config.yaml", "config file path")
 	flag.Parse()
 
 	config, err := loadConfig(*configPath)
@@ -411,11 +485,7 @@ func main() {
 			preData = append(preData, data[start:end])
 			preTags = append(preTags, uint32(i))
 		}
-		fmt.Println("Begin data len:", len(preData))
-		fmt.Println("Begin tags len:", len(preTags))
-		if len(preData) > 0 {
-			fmt.Println("Dim:", len(preData[0]))
-		}
+		fmt.Println("Begin size:", len(preData))
 		if err := index.Build(preData, preTags); err != nil {
 			fmt.Printf("Warn start error: %v\n", err)
 			return
@@ -435,4 +505,10 @@ func main() {
 	elapsedSec := time.Since(start).Seconds()
 
 	bench.CollectStats(elapsedSec)
+	
+	if err := bench.WriteResultsToCSV(elapsedSec, config); err != nil {
+		fmt.Printf("Failed to write results to CSV: %v\n", err)
+	}
 }
+
+

@@ -80,7 +80,6 @@ int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
     if (!index_ptr || !batch_data || !batch_tags) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
     return index->batch_insert(batch_data, batch_tags, batch_size);
-
 }
 
 int batch_search(void* index_ptr, float* batch_queries, uint32_t k,

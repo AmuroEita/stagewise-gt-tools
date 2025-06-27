@@ -55,7 +55,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         std::lock_guard<std::mutex> lock(index_mutex);
 
         assert((total_points_ + num_points) <= max_elements_);
-        // std::cout << "Insert batch size: " << num_points << std::endl; 
+        // std::cout << "Insert batch size: " << num_points << std::endl;
 
         for (size_t i = 0; i < num_points * dim_; ++i) {
             data_[total_points_ * dim_ + i] = batch_data[i];

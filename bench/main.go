@@ -63,8 +63,8 @@ type Bench struct {
 	searchResults   []*internal.SearchResult
 	resultsMu       sync.Mutex
 	config          *Config
-	insertPointCnt int
-	searchPointCnt int
+	insertPointCnt  int
+	searchPointCnt  int
 }
 
 func ConcurrentBench(index Index, config Config) *Bench {
@@ -248,7 +248,7 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 	}
 
 	resultPath := filepath.Join(config.Result.OutputDir, "benchmark_results.csv")
-	
+
 	fileExists := false
 	if _, err := os.Stat(resultPath); err == nil {
 		fileExists = true

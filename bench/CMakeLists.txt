@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_BUILD_TYPE Debug)
 
+find_package(OpenMP REQUIRED)
+
 add_subdirectory(algorithms/hnsw/hnswlib hnswlib)
 add_subdirectory(algorithms/parlayann/parlayann parlayann)
 
@@ -25,4 +27,5 @@ target_include_directories(index PRIVATE
 target_link_libraries(index PRIVATE
     hnswlib
     ParlayANN
+    OpenMP::OpenMP_CXX
 )

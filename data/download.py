@@ -3,15 +3,15 @@ import tarfile
 import subprocess
 
 urls = [
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/gist.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/sift10m.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/deep1M.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/msong.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/glove1.2m.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/glove2.2m.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/imagenet.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/netflix.tar.gz",
-    "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/word2vec.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/gist.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/sift10m.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/deep1M.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/msong.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/glove1.2m.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/glove2.2m.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/imagenet.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/netflix.tar.gz",
+    # "https://www.cse.cuhk.edu.hk/systems/hash/gqr/dataset/word2vec.tar.gz",
     "ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz"
 ]
 

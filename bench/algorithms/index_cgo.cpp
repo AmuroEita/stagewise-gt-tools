@@ -5,8 +5,10 @@
 #include <vector>
 
 #include "hnsw/hnsw.hpp"
-#include "index.hpp"
 #include "parlayann/parlay_hnsw.hpp"
+#include "parlayann/parlay_vamana.hpp"
+#include "vamana/vamana.hpp"
+#include "index.hpp"
 
 extern "C" {
 
@@ -27,7 +29,10 @@ void* create_index(IndexType type, IndexParams params) {
                                               params.num_threads);
             }
             break;
-
+        case INDEX_TYPE_PARLAYVAMANA:
+            if (params.data_type == DATA_TYPE_FLOAT) {
+                index = mew ParlayVamana<float>(p)
+            }
         default:
             return nullptr;
     }

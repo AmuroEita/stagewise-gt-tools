@@ -7,6 +7,7 @@ package internal
 import "C"
 import (
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -71,6 +72,9 @@ func (i *Index) Build(data [][]float32, tags []uint32) error {
 	if len(data) == 0 || len(tags) == 0 {
 		return nil
 	}
+	
+	startTime := time.Now()
+	
 	numPoints := len(data)
 	dim := len(data[0])
 	flatData := make([]float32, numPoints*dim)
@@ -83,6 +87,12 @@ func (i *Index) Build(data [][]float32, tags []uint32) error {
 		(*C.uint32_t)(&tags[0]),
 		C.size_t(len(tags)),
 	)
+	
+	buildTime := time.Since(startTime)
+	qps := float64(numPoints) / buildTime.Seconds()
+	
+	fmt.Printf("Build completed: %d points in %v (%.2f QPS)\n", numPoints, buildTime, qps)
+	
 	if result != 0 {
 		return fmt.Errorf("build index failed with code: %d", result)
 	}

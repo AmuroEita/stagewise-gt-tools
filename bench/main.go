@@ -80,7 +80,6 @@ func ConcurrentBench(index Index, config Config) *Bench {
 
 func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
 	defer close(b.taskQueue)
-	fmt.Println("ProduceTasks finished and closed taskQueue")
 	beginNum := config.Data.BeginNum
 	writeBatchSize := config.Data.WriteBatchSize
 	writeRatio := config.Workload.WriteRatio
@@ -88,6 +87,11 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 
 	insertTotal := len(data) / dim
 	searchTotal := config.Data.MaxQueries
+
+	if beginNum >= int(config.Data.MaxElements) {
+		fmt.Printf("BeginNum (%d) >= MaxElements (%d), skipping all tasks\n", beginNum, config.Data.MaxElements)
+		return
+	}
 
 	startInsertOffset := beginNum
 	startSearchOffset := 0
@@ -503,6 +507,12 @@ func main() {
 			return
 		}
 		fmt.Println("Index Built")
+	}
+
+	// 如果 beginNum >= max_elements，则不需要运行基准测试
+	if beginNum >= int(config.Data.MaxElements) {
+		fmt.Printf("BeginNum (%d) >= MaxElements (%d), no benchmark needed\n", beginNum, config.Data.MaxElements)
+		return
 	}
 
 	var bench *Bench

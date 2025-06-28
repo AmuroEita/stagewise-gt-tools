@@ -28,7 +28,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
           ef_construction_(ef_construction),
           m_l_(m_l),
           alpha_(alpha),
-          num_threads_(num_threads),
+          num_threads_(num_threads),+
           max_elements_(max_elements),
           total_points_(0) {
         data_.resize(max_elements * dim_);
@@ -36,27 +36,16 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-#pragma omp parallel for num_threads(num_threads_)
-        for (size_t i = 0; i < num_points * dim_; ++i) {
-            data_[i] = data[i];
-        }
+        data_.assign(data, data + num_points * dim_);
         total_points_ = num_points;
-
         Range points_range(data_.data(), total_points_, dim_);
+        
         auto ps = parlay::delayed_seq<Point>(
-            total_points_, [&](size_t i) { return points_range[i]; });
+            total_points_, [points_range](size_t i) { return points_range[i]; });
 
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
                                                    m_l_, graph_degree_,
                                                    ef_construction_, alpha_);
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            end_time - start_time);
-        std::cout << "ParlayHNSW build time: " << duration.count() << " ms for "
-                  << num_points << " points" << std::endl;
     }
 
     int batch_insert(const T* batch_data, const TagT* batch_tags,
@@ -64,14 +53,14 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         std::lock_guard<std::mutex> lock(index_mutex);
 
         assert((total_points_ + num_points) <= max_elements_);
-        // std::cout << "Insert batch size: " << num_points << std::endl;
-
-        for (size_t i = 0; i < num_points * dim_; ++i) {
-            data_[total_points_ * dim_ + i] = batch_data[i];
-        }
+        std::copy(batch_data, batch_data + num_points * dim_, 
+                  data_.begin() + total_points_ * dim_);
+        
         Range points(data_.data() + total_points_ * dim_, num_points, dim_);
+    
         auto ps = parlay::delayed_seq<Point>(
-            num_points, [&](size_t i) { return points[i]; });
+            num_points, [points](size_t i) { return points[i]; });
+        
         total_points_ += num_points;
         index_->batch_insert(ps.begin(), ps.end(), batch_tags[0]);
         return 0;

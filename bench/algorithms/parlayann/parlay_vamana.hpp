@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "../index.hpp"
-#include "parlayann/algorithms/vamana/vamana.hpp"
 #include "parlayann/algorithms/utils/euclidian_point.h"
 #include "parlayann/algorithms/utils/point_range.h"
 #include "parlayann/algorithms/utils/types.h"
+#include "parlayann/algorithms/vamana/vamana.hpp"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class ParlayVamana : public IndexBase<T, TagT, LabelT> {
@@ -21,8 +21,8 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
     using desc = parlayANN::Desc_HNSW<T, Point>;
 
     ParlayVamana(size_t dim, size_t max_elements, size_t M,
-               size_t ef_construction, float m_l, float alpha,
-               bool two_pass, size_t num_threads)
+                 size_t ef_construction, float m_l, float alpha, bool two_pass,
+                 size_t num_threads)
         : dim_(dim),
           graph_degree_(M),
           ef_construction_(ef_construction),
@@ -41,10 +41,12 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
         Range points(data_.data(), total_points_, dim_);
         parlayANN::stats<TagT> build_stats(points->size());
 
-        parlayANN::Graph<TagT> G = parlayANN::Graph<TagT>(graph_degree_, max_elements_);
-        parlayANN::BuildParams BP(graph_degree_, ef_construction_, alpha_, two_pass ? 2 : 1);
+        parlayANN::Graph<TagT> G =
+            parlayANN::Graph<TagT>(graph_degree_, max_elements_);
+        parlayANN::BuildParams BP(graph_degree_, ef_construction_, alpha_,
+                                  two_pass ? 2 : 1);
         index_ = knn_index<Range, Range, TagT>(BP);
-        index_->build_index(G, *points, *points, build_stats);                                
+        index_->build_index(G, *points, *points, build_stats);
     }
 
     int batch_insert(const T* batch_data, const TagT* batch_tags,
@@ -53,9 +55,9 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
 
         assert((total_points_ + num_points) <= max_elements_);
 
-        std::copy(batch_data, batch_data + num_points * dim_, 
+        std::copy(batch_data, batch_data + num_points * dim_,
                   data_.begin() + total_points_ * dim_);
-        
+
         Range points(data_.data() + total_points_ * dim_, num_points, dim_);
         auto ps = parlay::delayed_seq<Point>(
             num_points, [&](size_t i) { return points[i]; });

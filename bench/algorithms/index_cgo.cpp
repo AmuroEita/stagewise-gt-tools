@@ -5,10 +5,10 @@
 #include <vector>
 
 #include "hnsw/hnsw.hpp"
+#include "index.hpp"
 #include "parlayann/parlay_hnsw.hpp"
 #include "parlayann/parlay_vamana.hpp"
 #include "vamana/vamana.hpp"
-#include "index.hpp"
 
 extern "C" {
 

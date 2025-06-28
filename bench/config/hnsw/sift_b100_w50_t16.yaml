@@ -1,7 +1,7 @@
 data:
   dataset_name: sift
   max_elements: 1000000
-  begin_num: 5000
+  begin_num: 1000000
   write_batch_size: 100000
   max_queries: 10000
   data_type: float

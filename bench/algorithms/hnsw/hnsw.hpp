@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <iostream>
 
 #include "../index.hpp"
 #include "hnswlib/hnswlib/hnswlib.h"
@@ -17,9 +18,16 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+#pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            index_->addPoint(data + i * dim_, tags[i]);
+            index_->addPoint((void*)(data + i * dim_), tags[i]);
         }
+        
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        std::cout << "HNSW build time: " << duration.count() << " ms for " << num_points << " points" << std::endl;
     }
 
     int insert(const T* data, const TagT tag) override {

@@ -5,8 +5,8 @@
 
 #include <chrono>
 #include <cstdint>
-#include <vector>
 #include <iostream>
+#include <vector>
 
 struct QParams {
     size_t Ls = 100;

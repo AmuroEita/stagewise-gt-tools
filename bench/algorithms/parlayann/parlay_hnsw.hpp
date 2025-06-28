@@ -37,7 +37,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
         auto start_time = std::chrono::high_resolution_clock::now();
-        
+
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points * dim_; ++i) {
             data_[i] = data[i];
@@ -51,10 +51,12 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
                                                    m_l_, graph_degree_,
                                                    ef_construction_, alpha_);
-        
+
         auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        std::cout << "ParlayHNSW build time: " << duration.count() << " ms for " << num_points << " points" << std::endl;
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            end_time - start_time);
+        std::cout << "ParlayHNSW build time: " << duration.count() << " ms for "
+                  << num_points << " points" << std::endl;
     }
 
     int batch_insert(const T* batch_data, const TagT* batch_tags,

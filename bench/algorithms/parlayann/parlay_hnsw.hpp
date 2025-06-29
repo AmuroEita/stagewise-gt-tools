@@ -38,10 +38,10 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     void build(const T* data, const TagT* tags, size_t num_points) override {
         data_.assign(data, data + num_points * dim_);
         total_points_ = num_points;
-        Range points_range(data_.data(), total_points_, dim_);
+        Range points(data_.data(), total_points_, dim_);
         
         auto ps = parlay::delayed_seq<Point>(
-            total_points_, [points_range](size_t i) { return points_range[i]; });
+            total_points_, [points](size_t i) { return points[i]; });
 
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
                                                    m_l_, graph_degree_,
@@ -97,14 +97,14 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             batch_results[i] = new TagT[k];
         }
 
-        Range points_range(data_.data(), total_points_, dim_);
+        Range points(data_.data(), total_points_, dim_);
 
         auto start = std::chrono::high_resolution_clock::now();
         auto graph = typename ANN::HNSW<desc>::graph(*index_, 0);
         parlay::parallel_for(0, num_queries, [&](size_t i) {
             auto q = qpoints[i];
             auto results = parlayANN::beam_search_impl<uint32_t>(
-                q, graph, points_range, starts, QP);
+                q, graph, points, starts, QP);
 
             for (size_t j = 0; j < k && j < results.first.first.size(); ++j) {
                 batch_results[i][j] = results.first.first[j].first;

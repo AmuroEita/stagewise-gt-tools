@@ -10,5 +10,5 @@
 
 [submodule "bench/algorithms/vamana/diskann"]
 	path = bench/algorithms/vamana/diskann
-	url = https://github.com/microsoft/DiskANN.git
-	branch = main
+	url = https://github.com/Kwan-Yiu/DiskANN.git
+	branch = pic

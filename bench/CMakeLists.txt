@@ -10,6 +10,7 @@ find_package(OpenMP REQUIRED)
 
 add_subdirectory(algorithms/hnsw/hnswlib hnswlib)
 add_subdirectory(algorithms/parlayann/parlayann parlayann)
+add_subdirectory(algorithms/vamana/DiskANN diskann)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
@@ -22,10 +23,12 @@ target_include_directories(index PRIVATE
     ${CMAKE_SOURCE_DIR}/algorithms
     ${CMAKE_SOURCE_DIR}/../hnswlib
     ${CMAKE_SOURCE_DIR}/../parlayann
+    ${CMAKE_SOURCE_DIR}/algorithms/vamana/diskann/include
 )
 
 target_link_libraries(index PRIVATE
     hnswlib
     ParlayANN
+    diskann
     OpenMP::OpenMP_CXX
 )

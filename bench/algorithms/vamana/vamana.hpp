@@ -10,12 +10,12 @@
 #include "DiskANN/include/parameters.h"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
-class HNSW : public IndexBase<T, TagT, LabelT> {
+class Vamana : public IndexBase<T, TagT, LabelT> {
    public:
-    HNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
+    Vamana(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
          float alpha, size_t num_threads)
-        : dim_(dim), num_threads_(num_threads), space(dim) {
-        metric = diskann::L2;
+        : dim_(dim), num_threads_(num_threads) {
+        diskann::Metric metric = diskann::L2;
 
         diskann::IndexWriteParameters params =
             diskann::IndexWriteParametersBuilder(ef_construction, M)
@@ -25,15 +25,18 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
                 .with_num_threads(num_threads)
                 .build();
 
+        auto params_ptr = std::make_shared<diskann::IndexWriteParameters>(params);
+        auto search_params_ptr = std::make_shared<diskann::IndexSearchParams>(Ls_, num_threads);
+
         index_ = std::make_unique<diskann::Index<T, TagT, TagT>>(
-            metric, dim_, max_elements, true, params, 100, num_threads, true,
-            true, false, 0, false);
+            metric, dim_, max_elements, params_ptr, search_params_ptr, 0, true,
+            true, false, false, 0, false);
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            index_->insert_point((void*)(data + i * dim_), tags[i]);
+            index_->insert_point(data + i * dim_, tags[i]);
         }
     }
 
@@ -46,8 +49,9 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
                      size_t num_points) override {
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            index_->insert_point((void*)(batch_data + i * dim_), batch_tags[i]);
+            index_->insert_point(batch_data + i * dim_, batch_tags[i]);
         }
+        return 0;
     }
 
     void set_query_params(const QParams& params) override { Ls_ = params.Ls; }
@@ -81,7 +85,7 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
 
     uint32_t L_;
     uint32_t R_;
-    uint32_t Ls_;
+    uint32_t Ls_ = 100;
     float alpha_;
     size_t dim_;
     size_t num_threads_;

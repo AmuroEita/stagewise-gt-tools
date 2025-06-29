@@ -10,8 +10,9 @@ extern "C" {
 typedef enum {
     INDEX_TYPE_HNSW = 0,
     INDEX_TYPE_PARLAYHNSW = 1,
-    INDEX_TYPE_PARLAYVAMANA = 2,
-    INDEX_TYPE_CCHNSW = 3,
+    INDEX_TYPE_VAMANA = 2,
+    INDEX_TYPE_PARLAYVAMANA = 3,
+    INDEX_TYPE_CCHNSW = 4,
 } IndexType;
 
 typedef enum {

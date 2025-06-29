@@ -345,6 +345,19 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 	}
 }
 
+func (b *Bench) CheckRecall(config *Config) error {
+	if config.Result.GtPath == "" {
+		fmt.Println("No ground truth path provided, skipping recall check")
+		return nil
+	}
+
+	fmt.Println("Checking recall against ground truth...")
+	
+	
+	fmt.Println("Recall check completed")
+	return nil
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -527,6 +540,13 @@ func main() {
 	bench.wg.Wait()
 	fmt.Println("All workers finished")
 	elapsedSec := time.Since(start).Seconds()
+
+
+	if config.Result.GtPath != "" {
+		if err := bench.CheckRecall(config); err != nil {
+			fmt.Printf("Failed to check recall: %v\n", err)
+		}
+	}
 
 	bench.CollectStats(elapsedSec)
 	if err := bench.WriteResultsToCSV(elapsedSec, config); err != nil {

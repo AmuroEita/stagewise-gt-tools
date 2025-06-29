@@ -13,7 +13,7 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class Vamana : public IndexBase<T, TagT, LabelT> {
    public:
     Vamana(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
-         float alpha, size_t num_threads)
+           float alpha, size_t num_threads)
         : dim_(dim), num_threads_(num_threads) {
         diskann::Metric metric = diskann::L2;
 
@@ -25,8 +25,10 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
                 .with_num_threads(num_threads)
                 .build();
 
-        auto params_ptr = std::make_shared<diskann::IndexWriteParameters>(params);
-        auto search_params_ptr = std::make_shared<diskann::IndexSearchParams>(Ls_, num_threads);
+        auto params_ptr =
+            std::make_shared<diskann::IndexWriteParameters>(params);
+        auto search_params_ptr =
+            std::make_shared<diskann::IndexSearchParams>(Ls_, num_threads);
 
         index_ = std::make_unique<diskann::Index<T, TagT, TagT>>(
             metric, dim_, max_elements, params_ptr, search_params_ptr, 0, true,

@@ -31,15 +31,16 @@ void* create_index(IndexType type, IndexParams params) {
             break;
         case INDEX_TYPE_VAMANA:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new Vamana<float>(params.dim, params.max_elements, params.M,
-                                          params.Lb, 1.2f, params.num_threads);
+                index =
+                    new Vamana<float>(params.dim, params.max_elements, params.M,
+                                      params.Lb, 1.2f, params.num_threads);
             }
             break;
         case INDEX_TYPE_PARLAYVAMANA:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new ParlayVamana<float>(params.dim, params.max_elements, params.M,
-                                                params.Lb, 1.0f, 1.2f, false,
-                                                params.num_threads);
+                index = new ParlayVamana<float>(params.dim, params.max_elements,
+                                                params.M, params.Lb, 1.0f, 1.2f,
+                                                false, params.num_threads);
             }
             break;
         default:

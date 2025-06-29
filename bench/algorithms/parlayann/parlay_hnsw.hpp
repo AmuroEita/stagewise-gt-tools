@@ -35,7 +35,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
-        data_range_ = Range(reinterpret_cast<const float*>(data), num_points, dim_, max_elements_);
+        data_range_ = Range(reinterpret_cast<const float*>(data), num_points,
+                            dim_, max_elements_);
         total_points_ = num_points;
 
         auto ps = parlay::delayed_seq<Point>(
@@ -51,12 +52,15 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         std::lock_guard<std::mutex> lock(index_mutex);
 
         assert((total_points_ + num_points) <= max_elements_);
-        
-        data_range_.extend(reinterpret_cast<const float*>(batch_data), num_points);
+
+        data_range_.extend(reinterpret_cast<const float*>(batch_data),
+                           num_points);
         total_points_ += num_points;
 
         auto ps = parlay::delayed_seq<Point>(
-            num_points, [this, num_points](size_t i) { return data_range_[total_points_ - num_points + i]; });
+            num_points, [this, num_points](size_t i) {
+                return data_range_[total_points_ - num_points + i];
+            });
 
         index_->batch_insert(ps.begin(), ps.end(), batch_tags[0]);
         return 0;

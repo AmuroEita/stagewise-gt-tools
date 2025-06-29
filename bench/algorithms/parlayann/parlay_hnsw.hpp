@@ -28,8 +28,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
           ef_construction_(ef_construction),
           m_l_(m_l),
           alpha_(alpha),
-          num_threads_(num_threads),+
-          max_elements_(max_elements),
+          num_threads_(num_threads),
+          +max_elements_(max_elements),
           total_points_(0) {
         data_.resize(max_elements * dim_);
         setenv("PARLAY_NUM_THREADS", std::to_string(num_threads).c_str(), 1);
@@ -38,10 +38,12 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     void build(const T* data, const TagT* tags, size_t num_points) override {
         data_.assign(data, data + num_points * dim_);
         total_points_ = num_points;
+
         Range points(data_.data(), total_points_, dim_);
-        
+
         auto ps = parlay::delayed_seq<Point>(
-            total_points_, [points](size_t i) { return points[i]; });
+            total_points_,
+            [points](size_t i) { return points[i]; });
 
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
                                                    m_l_, graph_degree_,
@@ -53,14 +55,14 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         std::lock_guard<std::mutex> lock(index_mutex);
 
         assert((total_points_ + num_points) <= max_elements_);
-        std::copy(batch_data, batch_data + num_points * dim_, 
+        std::copy(batch_data, batch_data + num_points * dim_,
                   data_.begin() + total_points_ * dim_);
-        
+
         Range points(data_.data() + total_points_ * dim_, num_points, dim_);
-    
+
         auto ps = parlay::delayed_seq<Point>(
             num_points, [points](size_t i) { return points[i]; });
-        
+
         total_points_ += num_points;
         index_->batch_insert(ps.begin(), ps.end(), batch_tags[0]);
         return 0;

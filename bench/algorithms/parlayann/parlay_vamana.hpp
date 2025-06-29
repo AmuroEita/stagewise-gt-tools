@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "../index.hpp"
-#include "parlayann/algorithms/vamana/vamana.hpp"
 #include "parlayann/algorithms/utils/euclidian_point.h"
 #include "parlayann/algorithms/utils/point_range.h"
 #include "parlayann/algorithms/utils/types.h"
+#include "parlayann/algorithms/vamana/vamana.hpp"
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class ParlayVamana : public IndexBase<T, TagT, LabelT> {
@@ -25,8 +25,8 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
     using QueryParams = parlayANN::QueryParams;
 
     ParlayVamana(size_t dim, size_t max_elements, size_t M,
-               size_t ef_construction, float m_l, float alpha,
-               bool two_pass, size_t num_threads)
+                 size_t ef_construction, float m_l, float alpha, bool two_pass,
+                 size_t num_threads)
         : dim_(dim),
           graph_degree_(M),
           ef_construction_(ef_construction),
@@ -45,7 +45,6 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
         total_points_ = num_points;
         Range points(data_.data(), total_points_, dim_);
         parlayANN::stats<TagT> build_stats(points->size());
-
         G_ = std::make_unique<Graph>(graph_degree_, max_elements_);
         BuildParams BP(graph_degree_, ef_construction_, alpha_, two_pass_ ? 2 : 1);
         index_ = std::make_unique<KnnIndex>(BP);
@@ -61,7 +60,7 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
             [&](size_t i) { return static_cast<indexType>(start_idx + i); }
         );
         
-        return index_->incr_batch_insert(points, *G_, Points, QPoints, BuildStats, BP.alpha);
+        return index_->incr_batch_insert(points, *G_, Range, Range, BuildStats, BP.alpha);
     }
 
     int insert(const T* point, const TagT tag) override {

@@ -352,8 +352,7 @@ func (b *Bench) CheckRecall(config *Config) error {
 	}
 
 	fmt.Println("Checking recall against ground truth...")
-	
-	
+
 	fmt.Println("Recall check completed")
 	return nil
 }
@@ -540,7 +539,6 @@ func main() {
 	bench.wg.Wait()
 	fmt.Println("All workers finished")
 	elapsedSec := time.Since(start).Seconds()
-
 
 	if config.Result.GtPath != "" {
 		if err := bench.CheckRecall(config); err != nil {

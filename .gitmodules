@@ -7,3 +7,8 @@
 	path = bench/algorithms/parlayann/parlayann
 	url = https://github.com/Kwan-Yiu/ParlayANN.git
 	branch = debug
+
+[submodule "bench/algorithms/vamana/diskann"]
+	path = bench/algorithms/vamana/diskann
+	url = https://github.com/microsoft/DiskANN.git
+	branch = main

@@ -46,21 +46,22 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
         Range points(data_.data(), total_points_, dim_);
         parlayANN::stats<TagT> build_stats(points->size());
         G_ = std::make_unique<Graph>(graph_degree_, max_elements_);
-        BuildParams BP(graph_degree_, ef_construction_, alpha_, two_pass_ ? 2 : 1);
+        BuildParams BP(graph_degree_, ef_construction_, alpha_,
+                       two_pass_ ? 2 : 1);
         index_ = std::make_unique<KnnIndex>(BP);
-        index_->build_index(*G_, points, points, build_stats);                                
+        index_->build_index(*G_, points, points, build_stats);
     }
 
     int batch_insert(const T* batch_data, const TagT* batch_tags,
                      size_t num_points) {
         size_t start_idx = G_->size();
-        
+
         parlay::sequence<indexType> points = parlay::tabulate(
-            num_points, 
-            [&](size_t i) { return static_cast<indexType>(start_idx + i); }
-        );
-        
-        return index_->incr_batch_insert(points, *G_, Range, Range, BuildStats, BP.alpha);
+            num_points,
+            [&](size_t i) { return static_cast<indexType>(start_idx + i); });
+
+        return index_->incr_batch_insert(points, *G_, Range, Range, BuildStats,
+                                         BP.alpha);
     }
 
     int insert(const T* point, const TagT tag) override {
@@ -82,20 +83,23 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) {
-        QueryParams QP(k, BP.L, 1.35, (long)Points.size(), (long)G.max_degree());
-        
-        parlay::parallel_for(0, num_queries, [&](size_t i) {
-            Point qpoint(reinterpret_cast<const float*>(batch_queries + i * dim_), dim_);
+        QueryParams QP(k, BP.L, 1.35, (long)Points.size(),
+                       (long)G.max_degree());
 
-            auto search_results = beam_search_rerank__<Point, QPoint, PR, QPR, indexType>(
-                qpoint, qpoint, G_, Range, Range, 0, QP);
-            
+        parlay::parallel_for(0, num_queries, [&](size_t i) {
+            Point qpoint(
+                reinterpret_cast<const float*>(batch_queries + i * dim_), dim_);
+
+            auto search_results =
+                beam_search_rerank__<Point, QPoint, PR, QPR, indexType>(
+                    qpoint, qpoint, G_, Range, Range, 0, QP);
+
             auto& results = search_results.first;
             for (uint32_t j = 0; j < k && j < results.size(); j++) {
                 batch_results[i][j] = static_cast<TagT>(results[j].first);
             }
         });
-        
+
         return 0;
     }
 

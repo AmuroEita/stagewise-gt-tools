@@ -42,8 +42,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         Range points(data_.data(), total_points_, dim_);
 
         auto ps = parlay::delayed_seq<Point>(
-            total_points_,
-            [points](size_t i) { return points[i]; });
+            total_points_, [points](size_t i) { return points[i]; });
 
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
                                                    m_l_, graph_degree_,

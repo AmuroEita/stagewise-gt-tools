@@ -3,8 +3,8 @@ package main
 import (
 	"ANN-CC-bench/bench/internal"
 	"context"
-	"encoding/csv"
 	"encoding/binary"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
@@ -336,7 +336,7 @@ func (b *Bench) CheckRecall(config *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to load queries: %v", err)
 	}
-	dim := int(b.config.Data.BatchSize) 
+	dim := int(b.config.Data.BatchSize)
 	numQueries := len(queries) / dim
 	recallAt := config.Search.RecallAt
 	Ls := config.Search.Ls

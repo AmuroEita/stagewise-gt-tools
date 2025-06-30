@@ -1,0 +1,2 @@
+algorithm,threads,batch_size,write_ratio,insert_p95_latency,insert_p99_latency,insert_mean_latency,insert_qps,search_p95_latency,search_p99_latency,search_mean_latency,search_qps,recall
+hnsw,48,200,0.50,2358393.00,2695649.00,1673812.26,28.49,547051.00,551087.00,322096.14,57.55,0

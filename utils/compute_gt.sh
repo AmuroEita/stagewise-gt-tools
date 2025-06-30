@@ -1,0 +1,1 @@
+./compute_gt --base_path  ../../data/sift/sift_base.fvecs --query_path ../../data/sift/sift_query.fvecs --k 20 --gt_path ../../data/sift/sift.gt20

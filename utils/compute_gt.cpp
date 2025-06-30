@@ -236,8 +236,6 @@ struct Args {
     std::string query_path;
     std::string batch_gt_path;
     std::string gt_path;
-    std::string data_type;
-    std::string dist_func;
     int k = 20;
     int increment = 10;
     int chunk_size = 10000;
@@ -252,25 +250,43 @@ void print_help() {
         << "  --query_path PATH    Path to query vectors file (required)\n"
         << "  --batch_gt_path PATH Path to save batch groundtruth (optional)\n"
         << "  --gt_path PATH       Path to save full groundtruth (optional)\n"
-        << "  --data_type TYPE     Data type (required)\n"
         << "  --k K                Number of nearest neighbors (default: 20)\n"
-        << "  --inc INCREMENT      Increment size for batch processing "
-           "(default: 10)\n"
+        << "  --inc INCREMENT      Increment size for batch processing (default: 10)\n"
         << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
-        << "  --threads N          Number of threads to use (default: 0, use "
-           "system default)\n"
-        << "  --help               Show this help message\n";
+        << "  --threads N          Number of threads to use (default: 0, use system default)\n"
+        << "  --help               Show this help message\n"
+        << "\n"
+        << "Mode Description:\n"
+        << "  1. Standard GT mode: Use --gt_path argument\n"
+        << "     - Compute full groundtruth\n"
+        << "     - Output a single file containing K nearest neighbors for all queries\n"
+        << "     - Suitable for standard evaluation\n"
+        << "\n"
+        << "  2. Batch mode: Use --batch_gt_path argument\n"
+        << "     - Incrementally compute groundtruth\n"
+        << "     - Output file contains multiple batches\n"
+        << "     - Suitable for large datasets and incremental evaluation\n"
+        << "\n"
+        << "Examples:\n"
+        << "  Standard GT mode:\n"
+        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path data/sift_query.fvecs --k 20 --gt_path data/sift.gt20\n"
+        << "\n"
+        << "  Batch mode:\n"
+        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path data/sift_query.fvecs --k 20 --batch_gt_path data/sift_batch.gt20\n"
+        << "\n"
+        << "  Use both modes:\n"
+        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path data/sift_query.fvecs --k 20 --gt_path data/sift.gt20 --batch_gt_path data/sift_batch.gt20\n";
 }
 
 Args parse_args(int argc, char *argv[]) {
     Args args;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--h") {
+        if (arg == "--help" || arg == "--h" || arg == "-h") {
             print_help();
             exit(0);
         }
-        if (arg == "--base_path" && i + 1 < argc)
+        else if (arg == "--base_path" && i + 1 < argc)
             args.base_path = argv[++i];
         else if (arg == "--query_path" && i + 1 < argc)
             args.query_path = argv[++i];
@@ -278,8 +294,6 @@ Args parse_args(int argc, char *argv[]) {
             args.batch_gt_path = argv[++i];
         else if (arg == "--gt_path" && i + 1 < argc)
             args.gt_path = argv[++i];
-        else if (arg == "--data_type" && i + 1 < argc)
-            args.data_type = argv[++i];
         else if (arg == "--k" && i + 1 < argc)
             args.k = std::stoi(argv[++i]);
         else if (arg == "--inc" && i + 1 < argc)
@@ -288,6 +302,11 @@ Args parse_args(int argc, char *argv[]) {
             args.chunk_size = std::stoi(argv[++i]);
         else if (arg == "--threads" && i + 1 < argc)
             args.num_threads = std::stoi(argv[++i]);
+        else {
+            std::cerr << "Error: Unknown argument '" << arg << "'" << std::endl;
+            std::cerr << "Use --help to see usage information" << std::endl;
+            exit(1);
+        }
     }
     return args;
 }
@@ -300,121 +319,119 @@ int main(int argc, char *argv[]) {
                              : std::thread::hardware_concurrency();
 
     std::cout << "Using " << num_threads << " threads" << std::endl;
-
     std::cout << "Starting computation..." << std::endl;
-    std::cout << "Reading base vectors from: " << args.base_path << std::endl;
+    
     std::vector<std::vector<float>> base = read_fvecs(args.base_path);
-    std::cout << "Reading query vectors from: " << args.query_path << std::endl;
     std::vector<std::vector<float>> queries = read_fvecs(args.query_path);
 
-    std::cout << "Computing groundtruth for " << args.k << " nearest neighbors"
-              << std::endl;
+        std::cout << "Computing groundtruth for " << args.k << " nearest neighbors"
+                  << std::endl;
 
-    if (!args.batch_gt_path.empty()) {
-        std::cout << "Attempting to open batch groundtruth file: "
-                  << args.batch_gt_path << std::endl;
-        std::ofstream out(args.batch_gt_path, std::ios::binary);
-        if (!out.is_open()) {
-            std::cerr << "Error: Failed to open file: " << args.batch_gt_path
-                      << std::endl;
-            throw std::runtime_error("Failed to open file: " +
-                                     args.batch_gt_path);
-        }
-        std::cout << "Successfully opened file for writing" << std::endl;
-
-        int n = static_cast<int>(queries.size());
-        int b = static_cast<int>((base.size() + args.increment - 1) /
-                                 args.increment);
-        out.write(reinterpret_cast<const char *>(&n), sizeof(int));
-        out.write(reinterpret_cast<const char *>(&args.k), sizeof(int));
-        out.write(reinterpret_cast<const char *>(&b), sizeof(int));
-
-        std::vector<std::vector<std::vector<PointPair>>> batch_results;
-        std::vector<int> batch_sizes;
-        batch_results.reserve(args.chunk_size);
-        batch_sizes.reserve(args.chunk_size);
-
-        size_t total_b = base.size();
-        size_t total_increments = total_b / args.increment;
-        size_t current_increment = 0;
-
-        for (size_t b_size = args.increment; b_size <= total_b;
-             b_size += args.increment) {
-            current_increment++;
-            int current_base_size = static_cast<int>(b_size);
-            batch_sizes.push_back(current_base_size);
-
-            std::vector<std::vector<PointPair>> current_batch_results(
-                queries.size());
-            std::vector<std::thread> threads;
-            size_t queries_per_thread =
-                (queries.size() + num_threads - 1) / num_threads;
-
-            auto worker = [&](size_t start, size_t end) {
-                IncrementalKNN knn(args.k);
-                for (size_t i = start; i < end && i < queries.size(); ++i) {
-                    knn.reset();
-                    std::vector<std::vector<float>> current_base(
-                        base.begin(), base.begin() + b_size);
-                    knn.add_new_vectors(current_base, queries[i]);
-                    current_batch_results[i] = knn.get_topk();
-                }
-            };
-
-            for (size_t t = 0; t < num_threads; ++t) {
-                size_t start = t * queries_per_thread;
-                size_t end =
-                    std::min(start + queries_per_thread, queries.size());
-                threads.emplace_back(worker, start, end);
-            }
-
-            for (auto &thread : threads) {
-                thread.join();
-            }
-
-            batch_results.push_back(std::move(current_batch_results));
-
-            std::cout << "Processed increment " << current_increment << "/"
-                      << total_increments << " ("
-                      << (current_increment * 100 / total_increments) << "%)"
-                      << " [base size: " << b_size << "]" << std::endl;
-
-            if (batch_results.size() >= static_cast<size_t>(args.chunk_size) ||
-                b_size + args.increment > total_b) {
-                std::cout << "Writing batch results for "
-                          << batch_results.size() << " increments to disk"
+        if (!args.batch_gt_path.empty()) {
+            std::cout << "Attempting to open batch groundtruth file: "
+                      << args.batch_gt_path << std::endl;
+            std::ofstream out(args.batch_gt_path, std::ios::binary);
+            if (!out.is_open()) {
+                std::cerr << "Error: Failed to open file: " << args.batch_gt_path
                           << std::endl;
+                throw std::runtime_error("Failed to open file: " +
+                                         args.batch_gt_path);
+            }
+            std::cout << "Successfully opened file for writing" << std::endl;
 
-                for (size_t i = 0; i < batch_results.size(); ++i) {
-                    out.write(reinterpret_cast<const char *>(&batch_sizes[i]),
-                              sizeof(int));
+            int n = static_cast<int>(queries.size());
+            int b = static_cast<int>((base.size() + args.increment - 1) /
+                                     args.increment);
+            out.write(reinterpret_cast<const char *>(&n), sizeof(int));
+            out.write(reinterpret_cast<const char *>(&args.k), sizeof(int));
+            out.write(reinterpret_cast<const char *>(&b), sizeof(int));
 
-                    for (const auto &result : batch_results[i]) {
-                        for (const auto &[id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&id),
-                                      sizeof(int));
-                        }
+            std::vector<std::vector<std::vector<PointPair>>> batch_results;
+            std::vector<int> batch_sizes;
+            batch_results.reserve(args.chunk_size);
+            batch_sizes.reserve(args.chunk_size);
+
+            size_t total_b = base.size();
+            size_t total_increments = total_b / args.increment;
+            size_t current_increment = 0;
+
+            for (size_t b_size = args.increment; b_size <= total_b;
+                 b_size += args.increment) {
+                current_increment++;
+                int current_base_size = static_cast<int>(b_size);
+                batch_sizes.push_back(current_base_size);
+
+                std::vector<std::vector<PointPair>> current_batch_results(
+                    queries.size());
+                std::vector<std::thread> threads;
+                size_t queries_per_thread =
+                    (queries.size() + num_threads - 1) / num_threads;
+
+                auto worker = [&](size_t start, size_t end) {
+                    IncrementalKNN knn(args.k);
+                    for (size_t i = start; i < end && i < queries.size(); ++i) {
+                        knn.reset();
+                        std::vector<std::vector<float>> current_base(
+                            base.begin(), base.begin() + b_size);
+                        knn.add_new_vectors(current_base, queries[i]);
+                        current_batch_results[i] = knn.get_topk();
                     }
+                };
 
-                    for (const auto &result : batch_results[i]) {
-                        for (const auto &[id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&dist),
-                                      sizeof(float));
-                        }
-                    }
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * queries_per_thread;
+                    size_t end =
+                        std::min(start + queries_per_thread, queries.size());
+                    threads.emplace_back(worker, start, end);
                 }
 
-                out.flush();
-                std::cout << "Flushed " << batch_results.size()
-                          << " increments to disk" << std::endl;
+                for (auto &thread : threads) {
+                    thread.join();
+                }
 
-                batch_results.clear();
-                batch_sizes.clear();
+                batch_results.push_back(std::move(current_batch_results));
+
+                std::cout << "Processed increment " << current_increment << "/"
+                          << total_increments << " ("
+                          << (current_increment * 100 / total_increments) << "%)"
+                          << " [base size: " << b_size << "]" << std::endl;
+
+                if (batch_results.size() >= static_cast<size_t>(args.chunk_size) ||
+                    b_size + args.increment > total_b) {
+                    std::cout << "Writing batch results for "
+                              << batch_results.size() << " increments to disk"
+                              << std::endl;
+
+                    for (size_t i = 0; i < batch_results.size(); ++i) {
+                        out.write(reinterpret_cast<const char *>(&batch_sizes[i]),
+                                  sizeof(int));
+
+                        for (const auto &result : batch_results[i]) {
+                            for (const auto &[id, dist] : result) {
+                                out.write(reinterpret_cast<const char *>(&id),
+                                          sizeof(int));
+                            }
+                        }
+
+                        for (const auto &result : batch_results[i]) {
+                            for (const auto &[id, dist] : result) {
+                                out.write(reinterpret_cast<const char *>(&dist),
+                                          sizeof(float));
+                            }
+                        }
+                    }
+
+                    out.flush();
+                    std::cout << "Flushed " << batch_results.size()
+                              << " increments to disk" << std::endl;
+
+                    batch_results.clear();
+                    batch_sizes.clear();
+                }
             }
+            out.close();
+            std::cout << "Closed output file: " << args.batch_gt_path << std::endl;
         }
-        out.close();
-        std::cout << "Closed output file: " << args.batch_gt_path << std::endl;
-    }
 
     if (!args.gt_path.empty()) {
         std::cout << "Processing full base size " << base.size()

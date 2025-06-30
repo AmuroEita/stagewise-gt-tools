@@ -150,7 +150,6 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 		}
 
 		if len(batchQueries) > 0 {
-			fmt.Printf("Search range: [%d, %d)\n", startSearchOffset, endSearchOffset)
 			b.taskQueue <- Task{
 				Type:      SearchTask,
 				Data:      batchQueries,
@@ -282,14 +281,14 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 	var searchP95, searchP99, searchMean, searchQPS float64
 
 	if b.insertCnt > 0 {
-		insertQPS = float64(b.insertCnt) / elapsedSec
+		insertQPS = float64(b.insertPointCnt) / elapsedSec
 		insertMean = mean(b.insertLatencies)
 		insertP95 = percentile(b.insertLatencies, 0.95)
 		insertP99 = percentile(b.insertLatencies, 0.99)
 	}
 
 	if b.searchCnt > 0 {
-		searchQPS = float64(b.searchCnt) / elapsedSec
+		searchQPS = float64(b.searchPointCnt) / elapsedSec
 		searchMean = mean(b.searchLatencies)
 		searchP95 = percentile(b.searchLatencies, 0.95)
 		searchP99 = percentile(b.searchLatencies, 0.99)
@@ -326,7 +325,7 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 	fmt.Println()
 
 	if b.insertCnt > 0 {
-		b.stats.InsertQPS = float64(b.insertCnt) / elapsedSec
+		b.stats.InsertQPS = float64(b.insertPointCnt) / elapsedSec
 		b.stats.MeanInsertLatency = mean(b.insertLatencies)
 		p95 := percentile(b.insertLatencies, 0.95)
 		p99 := percentile(b.insertLatencies, 0.99)
@@ -335,7 +334,7 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 		fmt.Println("No insert operations performed.")
 	}
 	if b.searchCnt > 0 {
-		b.stats.SearchQPS = float64(b.searchCnt) / elapsedSec
+		b.stats.SearchQPS = float64(b.searchPointCnt) / elapsedSec
 		b.stats.MeanSearchLatency = mean(b.searchLatencies)
 		p95 := percentile(b.searchLatencies, 0.95)
 		p99 := percentile(b.searchLatencies, 0.99)
@@ -521,7 +520,6 @@ func main() {
 		fmt.Println("Index Built")
 	}
 
-	// 如果 beginNum >= max_elements，则不需要运行基准测试
 	if beginNum >= int(config.Data.MaxElements) {
 		fmt.Printf("BeginNum (%d) >= MaxElements (%d), no benchmark needed\n", beginNum, config.Data.MaxElements)
 		return

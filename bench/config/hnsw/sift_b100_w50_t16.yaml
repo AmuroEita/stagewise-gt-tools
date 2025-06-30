@@ -1,7 +1,7 @@
 data:
   dataset_name: sift
   max_elements: 1000000
-  begin_num: 1000000
+  begin_num: 5000
   write_batch_size: 200
   max_queries: 10000
   data_type: float
@@ -18,7 +18,7 @@ search:
   ls: 50
 
 workload:
-  write_ratio: 1
+  write_ratio: 0.5
   num_threads: 48
   queue_size: 1000000
   query_new_data: false

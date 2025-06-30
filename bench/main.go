@@ -3,8 +3,8 @@ package main
 import (
 	"ANN-CC-bench/bench/internal"
 	"context"
-	"encoding/csv"
 	"encoding/binary"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
@@ -335,12 +335,20 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 }
 
 func (b *Bench) CheckRecall(queries []float32, dataDim int, config *Config) error {
+	fmt.Println()
 	if config.Result.GtPath == "" || config.Result.RecallToolPath == "" {
 		fmt.Println("No ground truth or recall tool path provided, skipping recall check")
 		return nil
 	}
 
-	numQueries := len(queries) / dataDim
+	fmt.Println("Checking recall against ground truth...")
+
+	queries, _, _, _, err := internal.LoadAlignedBin(config.Data.QueryPath)
+	if err != nil {
+		return fmt.Errorf("failed to load queries: %v", err)
+	}
+	dim := int(b.config.Data.BatchSize)
+	numQueries := len(queries) / dim
 	recallAt := config.Search.RecallAt
 	Ls := config.Search.Ls
 

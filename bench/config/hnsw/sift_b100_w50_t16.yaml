@@ -2,7 +2,7 @@ data:
   dataset_name: sift
   max_elements: 1000000
   begin_num: 5000
-  write_batch_size: 200
+  write_batch_size: 100
   max_queries: 10000
   data_type: float
   data_path: ../data/sift/sift_base.bin
@@ -18,14 +18,14 @@ search:
   ls: 50
 
 workload:
-  write_ratio: 0.5
+  write_ratio: 1
   num_threads: 48
-  queue_size: 1000000
+  queue_size: 1000
   query_new_data: false
-  input_rate: 1000000
+  input_rate: 10000
   enforce_consistency: true
 
 result:
-  output_dir: ./result
-  gt_path: ./result/gt.txt
-  batch_res_path: ./result/batch_res.txt
+  search_res_path: result/search_res.bin
+  gt_path: ../data/sift/sift.gt20
+  recall_tool_path: ../utils/build/calc_recall

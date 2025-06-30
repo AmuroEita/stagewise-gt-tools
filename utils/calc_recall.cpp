@@ -71,6 +71,7 @@ int main(int argc, char** argv) {
             if (dim_gs == 0) dim_gs = cnt;
             else if (cnt != dim_gs) {
                 std::cerr << "Inconsistent number of elements per line in ground truth file" << std::endl;
+                std::cerr << "Line " << num_queries + 1 << ": Expected " << dim_gs << ", but found " << cnt << "." << std::endl;
                 return 1;
             }
             num_queries++;
@@ -96,6 +97,7 @@ int main(int argc, char** argv) {
             if (dim_or == 0) dim_or = cnt;
             else if (cnt != dim_or) {
                 std::cerr << "Inconsistent number of elements per line in result file" << std::endl;
+                std::cerr << "Line " << qid + 1 << ": Expected " << dim_or << ", but found " << cnt << "." << std::endl;
                 return 1;
             }
             qid++;

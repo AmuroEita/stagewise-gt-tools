@@ -3,7 +3,6 @@ package main
 import (
 	"ANN-CC-bench/bench/internal"
 	"context"
-	"encoding/binary"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -341,14 +340,8 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 		return nil
 	}
 
-	fmt.Println("Checking recall against ground truth...")
+	fmt.Println("Calculating recall against ground truth...")
 
-	queries, _, _, _, err := internal.LoadAlignedBin(config.Data.QueryPath)
-	if err != nil {
-		return fmt.Errorf("failed to load queries: %v", err)
-	}
-	dim := int(b.config.Data.BatchSize)
-	numQueries := len(queries) / dim
 	recallAt := config.Search.RecallAt
 	Ls := config.Search.Ls
 
@@ -359,13 +352,17 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 	}
 	defer file.Close()
 
+	numQueries := len(queries) / dataDim
+	batchedQueries := make([][]float32, numQueries)
 	for i := 0; i < numQueries; i++ {
-		query := queries[i*dataDim : (i+1)*dataDim]
-		tags, err := b.index.BatchSearch([][]float32{query}, uint(recallAt), uint(Ls))
-		if err != nil {
-			return fmt.Errorf("search error: %v", err)
-		}
-		for j, id := range tags[0] {
+		batchedQueries[i] = queries[i*dataDim : (i+1)*dataDim]
+	}
+	tags, err := b.index.BatchSearch(batchedQueries, uint(recallAt), uint(Ls))
+	if err != nil {
+		return fmt.Errorf("search error: %v", err)
+	}
+	for i := 0; i < len(tags); i++ {
+		for j, id := range tags[i] {
 			if j > 0 {
 				_, _ = file.WriteString(" ")
 			}
@@ -564,11 +561,13 @@ func main() {
 
 	start := time.Now()
 
-	fmt.Println("start ProduceTasks and ConsumeTasks")
+	fmt.Println("Start producing tasks and consuming tasks")
 	go bench.ProduceTasks(data, queries, dataDim, config)
 	bench.ConsumeTasks(config.Workload.NumThreads)
 	bench.wg.Wait()
 	elapsedSec := time.Since(start).Seconds()
+
+	fmt.Println("Streaming bench done")
 
 	if config.Result.GtPath != "" {
 		if err := bench.CalcRecall(queries, dataDim, config); err != nil {

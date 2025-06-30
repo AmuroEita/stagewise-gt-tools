@@ -6,3 +6,4 @@ data/*
 bench/bench
 bench/algorithms/parlayann/parlayann
 bench/algorithms/hnsw/hnswlib
+result/

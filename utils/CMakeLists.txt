@@ -10,17 +10,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx -mavx2 -mfma")
 endif()
 
-add_executable(check_recall check_recall.cpp)
+add_executable(calc_recall calc_recall.cpp)
+add_executable(calc_incr_recall calc_incr_recall.cpp)
 add_executable(compute_gt compute_gt.cpp)
 add_executable(crop crop.cpp)
 add_executable(fvecs_to_bin fvecs_to_bin.cpp)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(check_recall PRIVATE -Wall -Wextra)
+    target_compile_options(calc_recall PRIVATE -Wall -Wextra)
+    target_compile_options(calc_incr_recall PRIVATE -Wall -Wextra)
     target_compile_options(compute_gt PRIVATE -Wall -Wextra)
     target_compile_options(crop PRIVATE -Wall -Wextra)
     target_compile_options(fvecs_to_bin PRIVATE -Wall -Wextra)
 endif()
 
-install(TARGETS check_recall compute_gt crop fvecs_to_bin
+install(TARGETS calc_recall calc_incr_recall compute_gt crop fvecs_to_bin
         RUNTIME DESTINATION bin)

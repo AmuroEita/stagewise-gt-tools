@@ -334,7 +334,7 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 	}
 }
 
-func (b *Bench) CheckRecall(queries []float32, dataDim int, config *Config) error {
+func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error {
 	fmt.Println()
 	if config.Result.GtPath == "" || config.Result.RecallToolPath == "" {
 		fmt.Println("No ground truth or recall tool path provided, skipping recall check")
@@ -355,7 +355,7 @@ func (b *Bench) CheckRecall(queries []float32, dataDim int, config *Config) erro
 	outPath := config.Result.SearchResPath
 	file, err := os.Create(outPath)
 	if err != nil {
-		return fmt.Errorf("failed to create result bin: %v", err)
+		return fmt.Errorf("failed to create result file: %v", err)
 	}
 	defer file.Close()
 
@@ -365,25 +365,26 @@ func (b *Bench) CheckRecall(queries []float32, dataDim int, config *Config) erro
 		if err != nil {
 			return fmt.Errorf("search error: %v", err)
 		}
-		if err := binary.Write(file, binary.LittleEndian, tags[0]); err != nil {
-			return err
+		for j, id := range tags[0] {
+			if j > 0 {
+				_, _ = file.WriteString(" ")
+			}
+			_, _ = file.WriteString(fmt.Sprintf("%d", id))
 		}
+		_, _ = file.WriteString("\n")
 	}
 	fmt.Printf("Search results written to: %s\n", outPath)
 
-	recallOut := config.Result.RecallOutPath
 	cmd := exec.Command(config.Result.RecallToolPath,
-		"--res_path", config.Result.SearchResPath,
-		"--gt_path", config.Result.GtPath,
-		"--recall_path", recallOut,
+		config.Result.GtPath,
+		config.Result.SearchResPath,
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	fmt.Printf("Running check_recall: %s\n", strings.Join(cmd.Args, " "))
+	fmt.Printf("Running calc_recall: %s\n", strings.Join(cmd.Args, " "))
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run check_recall: %v", err)
+		return fmt.Errorf("failed to run calc_recall: %v", err)
 	}
-	fmt.Printf("Recall result written to: %s\n", recallOut)
 	return nil
 }
 
@@ -454,7 +455,6 @@ type Config struct {
 		GtPath         string `yaml:"gt_path"`
 		SearchResPath  string `yaml:"search_res_path"`
 		RecallToolPath string `yaml:"recall_tool_path"`
-		RecallOutPath  string `yaml:"recall_out_path"`
 	} `yaml:"result"`
 }
 
@@ -571,7 +571,7 @@ func main() {
 	elapsedSec := time.Since(start).Seconds()
 
 	if config.Result.GtPath != "" {
-		if err := bench.CheckRecall(queries, dataDim, config); err != nil {
+		if err := bench.CalcRecall(queries, dataDim, config); err != nil {
 			fmt.Printf("Failed to check recall: %v\n", err)
 		}
 	}

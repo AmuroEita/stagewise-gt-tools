@@ -3,8 +3,8 @@ package main
 import (
 	"ANN-CC-bench/bench/internal"
 	"context"
-	"encoding/csv"
 	"encoding/binary"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
@@ -367,8 +367,8 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 		tags[i] = res
 	}
 
-	n := int32(len(tags))      
-	k := int32(len(tags[0]))   
+	n := int32(len(tags))
+	k := int32(len(tags[0]))
 	if err := binary.Write(file, binary.LittleEndian, n); err != nil {
 		return fmt.Errorf("failed to write n: %v", err)
 	}

@@ -42,7 +42,8 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
-        data_range_ = Range(reinterpret_cast<const float*>(data), num_points, dim_, max_elements_);
+        data_range_ = Range(reinterpret_cast<const float*>(data), num_points,
+                            dim_, max_elements_);
         total_points_ = num_points;
         parlayANN::stats<TagT> build_stats(num_points);
         G_ = std::make_unique<Graph>(graph_degree_, max_elements_);
@@ -56,20 +57,23 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
                      size_t num_points) {
         size_t start_idx = G_->size();
 
-        data_range_.extend(reinterpret_cast<const float*>(batch_data), num_points);
+        data_range_.extend(reinterpret_cast<const float*>(batch_data),
+                           num_points);
         total_points_ += num_points;
-        
-        Range new_points(reinterpret_cast<const float*>(batch_data), num_points, dim_);
-        
+
+        Range new_points(reinterpret_cast<const float*>(batch_data), num_points,
+                         dim_);
+
         parlay::sequence<TagT> points = parlay::tabulate(
             num_points,
             [&](size_t i) { return static_cast<TagT>(start_idx + i); });
 
-        BuildParams BP(graph_degree_, ef_construction_, alpha_, two_pass_ ? 2 : 1);
+        BuildParams BP(graph_degree_, ef_construction_, alpha_,
+                       two_pass_ ? 2 : 1);
         parlayANN::stats<TagT> build_stats(num_points);
 
-        return index_->incr_batch_insert(points, *G_, new_points, new_points, build_stats,
-                                         BP.alpha);
+        return index_->incr_batch_insert(points, *G_, new_points, new_points,
+                                         build_stats, BP.alpha);
     }
 
     int insert(const T* point, const TagT tag) override {
@@ -91,17 +95,20 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) {
-        QueryParams QP(k, query_params_.Ls, query_params_.alpha, static_cast<long>(total_points_),
+        QueryParams QP(k, query_params_.Ls, query_params_.alpha,
+                       static_cast<long>(total_points_),
                        static_cast<long>(graph_degree_));
-        Range query_points(reinterpret_cast<const float*>(batch_queries), num_queries, dim_);
-        
+        Range query_points(reinterpret_cast<const float*>(batch_queries),
+                           num_queries, dim_);
+
         parlay::sequence<TagT> starting_points = {0};
 
         parlay::parallel_for(0, num_queries, [&](size_t i) {
-            auto p = query_points[i];  
+            auto p = query_points[i];
 
-            auto search_results = parlayANN::beam_search(p, *G_, data_range_, starting_points, QP);
-            auto& beam_results = search_results.first.first; 
+            auto search_results = parlayANN::beam_search(p, *G_, data_range_,
+                                                         starting_points, QP);
+            auto& beam_results = search_results.first.first;
 
             for (uint32_t j = 0; j < k && j < beam_results.size(); j++) {
                 batch_results[i][j] = static_cast<TagT>(beam_results[j].first);
@@ -127,6 +134,6 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
     std::unique_ptr<KnnIndex> index_;
     std::unique_ptr<Graph> G_;
 
-    Range data_range_;  
+    Range data_range_;
     QParams query_params_;
 };

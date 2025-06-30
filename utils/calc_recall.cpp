@@ -52,61 +52,49 @@ int main(int argc, char **argv) {
     uint32_t num_queries = 0, dim_gs = 0, dim_or = 0;
 
     {
-        std::ifstream fin(gt_path);
+        std::ifstream fin(gt_path, std::ios::binary);
         if (!fin) {
             std::cerr << "Cannot open file: " << gt_path << std::endl;
             return 1;
         }
-        std::string line;
-        while (std::getline(fin, line)) {
-            std::istringstream iss(line);
-            uint32_t id;
-            uint32_t cnt = 0;
-            while (iss >> id) {
-                gold_std_vec.push_back(id);
-                cnt++;
-            }
-            if (dim_gs == 0)
-                dim_gs = cnt;
-            else if (cnt != dim_gs) {
-                std::cerr << "Inconsistent number of elements per line in "
-                             "ground truth file"
-                          << std::endl;
-                return 1;
-            }
-            num_queries++;
+        int32_t n, k;
+        fin.read(reinterpret_cast<char*>(&n), sizeof(int32_t));
+        fin.read(reinterpret_cast<char*>(&k), sizeof(int32_t));
+        gold_std_vec.resize(n * k);
+        fin.read(reinterpret_cast<char*>(gold_std_vec.data()), n * k * sizeof(int32_t));
+        if (dim_gs == 0)
+            dim_gs = k;
+        else if (k != dim_gs) {
+            std::cerr << "Inconsistent number of elements per line in "
+                         "ground truth file"
+                      << std::endl;
+            return 1;
         }
+        num_queries = n;
     }
 
     {
-        std::ifstream fin(result_path);
+        std::ifstream fin(result_path, std::ios::binary);
         if (!fin) {
             std::cerr << "Cannot open file: " << result_path << std::endl;
             return 1;
         }
-        std::string line;
-        uint32_t qid = 0;
-        while (std::getline(fin, line)) {
-            std::istringstream iss(line);
-            uint32_t id;
-            uint32_t cnt = 0;
-            while (iss >> id) {
-                our_results_vec.push_back(id);
-                cnt++;
-            }
-            if (dim_or == 0)
-                dim_or = cnt;
-            else if (cnt != dim_or) {
-                std::cerr
-                    << "Inconsistent number of elements per line in result file"
-                    << std::endl;
-                return 1;
-            }
-            qid++;
+        int32_t n, k;
+        fin.read(reinterpret_cast<char*>(&n), sizeof(int32_t));
+        fin.read(reinterpret_cast<char*>(&k), sizeof(int32_t));
+        our_results_vec.resize(n * k);
+        fin.read(reinterpret_cast<char*>(our_results_vec.data()), n * k * sizeof(int32_t));
+        if (dim_or == 0)
+            dim_or = k;
+        else if (k != dim_or) {
+            std::cerr
+                << "Inconsistent number of elements per line in result file"
+                << std::endl;
+            return 1;
         }
-        if (qid != num_queries) {
+        if (n != num_queries) {
             std::cerr << "Number of queries mismatch: gt " << num_queries
-                      << ", result " << qid << std::endl;
+                      << ", result " << n << std::endl;
             return 1;
         }
     }

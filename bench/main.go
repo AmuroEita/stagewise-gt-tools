@@ -4,6 +4,7 @@ import (
 	"ANN-CC-bench/bench/internal"
 	"context"
 	"encoding/csv"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -357,24 +358,37 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 	for i := 0; i < numQueries; i++ {
 		batchedQueries[i] = queries[i*dataDim : (i+1)*dataDim]
 	}
-	tags, err := b.index.BatchSearch(batchedQueries, uint(recallAt), uint(Ls))
-	if err != nil {
-		return fmt.Errorf("search error: %v", err)
-	}
-	for i := 0; i < len(tags); i++ {
-		for j, id := range tags[i] {
-			if j > 0 {
-				_, _ = file.WriteString(" ")
-			}
-			_, _ = file.WriteString(fmt.Sprintf("%d", id))
+	tags := make([][]uint32, numQueries)
+	for i := 0; i < numQueries; i++ {
+		res, err := b.index.(*internal.Index).Search(batchedQueries[i], uint(recallAt), internal.QueryParams{Ls: uint(Ls)})
+		if err != nil {
+			return fmt.Errorf("search error: %v", err)
 		}
-		_, _ = file.WriteString("\n")
+		tags[i] = res
+	}
+
+	n := int32(len(tags))      
+	k := int32(len(tags[0]))   
+	if err := binary.Write(file, binary.LittleEndian, n); err != nil {
+		return fmt.Errorf("failed to write n: %v", err)
+	}
+	if err := binary.Write(file, binary.LittleEndian, k); err != nil {
+		return fmt.Errorf("failed to write k: %v", err)
+	}
+	for i := 0; i < int(n); i++ {
+		for j := 0; j < int(k); j++ {
+			id := tags[i][j]
+			if err := binary.Write(file, binary.LittleEndian, id); err != nil {
+				return fmt.Errorf("failed to write id: %v", err)
+			}
+		}
 	}
 	fmt.Printf("Search results written to: %s\n", outPath)
 
 	cmd := exec.Command(config.Result.RecallToolPath,
 		config.Result.GtPath,
 		config.Result.SearchResPath,
+		fmt.Sprintf("%d", recallAt),
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

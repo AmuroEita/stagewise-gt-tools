@@ -4,6 +4,7 @@ import (
 	"ANN-CC-bench/bench/internal"
 	"context"
 	"encoding/csv"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -79,29 +80,26 @@ func ConcurrentBench(index Index, config Config) *Bench {
 }
 
 func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
-	defer close(b.taskQueue)
+	defer func() {
+		close(b.taskQueue)
+	}()
 	beginNum := config.Data.BeginNum
 	writeBatchSize := config.Data.WriteBatchSize
 	writeRatio := config.Workload.WriteRatio
 	searchBatchSize := int(float64(writeBatchSize) * (1.0/writeRatio - 1.0))
 
 	insertTotal := len(data) / dim
-	searchTotal := config.Data.MaxQueries
+	numInsertBatches := (insertTotal - beginNum + writeBatchSize - 1) / writeBatchSize
 
 	if beginNum >= int(config.Data.MaxElements) {
 		fmt.Printf("BeginNum (%d) >= MaxElements (%d), skipping all tasks\n", beginNum, config.Data.MaxElements)
 		return
 	}
 
-	startInsertOffset := beginNum
-	startSearchOffset := 0
-	if config.Workload.QueryNewData {
-		startSearchOffset = beginNum
-	}
 	queryIdx := 0
-	totalQueries := len(queries) / dim
 
-	for startInsertOffset < insertTotal || startSearchOffset < searchTotal {
+	for batchIdx := 0; batchIdx < numInsertBatches; batchIdx++ {
+		startInsertOffset := beginNum + batchIdx*writeBatchSize
 		endInsertOffset := min(startInsertOffset+writeBatchSize, insertTotal)
 		if endInsertOffset > startInsertOffset {
 			task := Task{
@@ -116,40 +114,24 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 				task.Tags = append(task.Tags, uint32(i))
 			}
 			b.taskQueue <- task
-			startInsertOffset = endInsertOffset
 		}
 
-		endSearchOffset := min(startSearchOffset+searchBatchSize, searchTotal)
 		batchQueries := make([][]float32, 0, searchBatchSize)
 		batchTags := make([]uint32, 0, searchBatchSize)
-
-		if config.Workload.QueryNewData {
-			for i := startSearchOffset; i < endSearchOffset; i++ {
-				randomIdx := startInsertOffset - (i - startSearchOffset + 1)
-				if randomIdx < 0 {
-					randomIdx = 0
-				}
-				start := randomIdx * dim
-				end := start + dim
-				batchQueries = append(batchQueries, data[start:end])
-				batchTags = append(batchTags, uint32(beginNum+randomIdx))
-			}
-		} else {
-			for i := startSearchOffset; i < endSearchOffset; i++ {
-				queryIdx = (queryIdx + 1) % totalQueries
-				start := queryIdx * dim
-				end := start + dim
-				batchQueries = append(batchQueries, queries[start:end])
-				batchTags = append(batchTags, uint32(queryIdx))
-			}
-		}
-
-		if err := b.rateLimiter.Wait(context.Background()); err != nil {
-			fmt.Printf("Rate limit error: %v\n", err)
-			continue
+		for i := 0; i < searchBatchSize; i++ {
+			idx := queryIdx % config.Data.MaxQueries
+			start := idx * dim
+			end := start + dim
+			batchQueries = append(batchQueries, queries[start:end])
+			batchTags = append(batchTags, uint32(idx))
+			queryIdx++
 		}
 
 		if len(batchQueries) > 0 {
+			if err := b.rateLimiter.Wait(context.Background()); err != nil {
+				fmt.Printf("Rate limit error: %v\n", err)
+				continue
+			}
 			b.taskQueue <- Task{
 				Type:      SearchTask,
 				Data:      batchQueries,
@@ -158,7 +140,6 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 				Ls:        config.Search.Ls,
 				Timestamp: time.Now(),
 			}
-			startSearchOffset = endSearchOffset
 			b.searchCnt += len(batchQueries)
 		}
 	}
@@ -185,8 +166,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 
 	for i := 0; i < numWorkers; i++ {
 		b.wg.Add(1)
-		go func() {
-			defer b.wg.Done()
+		go func(workerId int) {
 			for task := range b.taskQueue {
 				start := time.Now()
 				switch task.Type {
@@ -240,7 +220,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					bar.Describe(fmt.Sprintf("Insert: %.0f/s, Search: %.0f/s", insertQPS, searchQPS))
 				}
 			}
-		}()
+		}(i)
 	}
 }
 
@@ -352,6 +332,49 @@ func (b *Bench) CheckRecall(config *Config) error {
 
 	fmt.Println("Checking recall against ground truth...")
 
+	queries, _, _, _, err := internal.LoadAlignedBin(config.Data.QueryPath)
+	if err != nil {
+		return fmt.Errorf("failed to load queries: %v", err)
+	}
+	dim := int(b.config.Data.BatchSize) 
+	numQueries := len(queries) / dim
+	recallAt := config.Search.RecallAt
+	Ls := config.Search.Ls
+
+	results := make([]*internal.SearchResult, 0, numQueries)
+	for i := 0; i < numQueries; i++ {
+		query := queries[i*dim : (i+1)*dim]
+		tags, err := b.index.BatchSearch([][]float32{query}, uint(recallAt), uint(Ls))
+		if err != nil {
+			return fmt.Errorf("search error: %v", err)
+		}
+		res := internal.NewSearchResult(uint64(0), uint64(i), tags[0])
+		results = append(results, res)
+	}
+
+	outPath := config.Result.BatchResPath
+	file, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to create result bin: %v", err)
+	}
+	defer file.Close()
+	for _, res := range results {
+		if err := binary.Write(file, binary.LittleEndian, res.InsertOffset); err != nil {
+			return err
+		}
+		if err := binary.Write(file, binary.LittleEndian, res.QueryIdx); err != nil {
+			return err
+		}
+		tagLen := uint64(len(res.Tags))
+		if err := binary.Write(file, binary.LittleEndian, tagLen); err != nil {
+			return err
+		}
+		if err := binary.Write(file, binary.LittleEndian, res.Tags); err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("Recall search results written to: %s\n", outPath)
 	fmt.Println("Recall check completed")
 	return nil
 }
@@ -441,6 +464,7 @@ func loadConfig(filename string) (*Config, error) {
 }
 
 func main() {
+	fmt.Println("main start")
 	configPath := flag.String("config", "config/config.yaml", "config file path")
 	flag.Parse()
 
@@ -531,21 +555,22 @@ func main() {
 
 	start := time.Now()
 
+	fmt.Println("start ProduceTasks and ConsumeTasks")
 	go bench.ProduceTasks(data, queries, dataDim, config)
 	bench.ConsumeTasks(config.Workload.NumThreads)
-
+	fmt.Println("waiting for all workers")
 	bench.wg.Wait()
 	fmt.Println("All workers finished")
 	elapsedSec := time.Since(start).Seconds()
+
+	bench.CollectStats(elapsedSec)
+	if err := bench.WriteResultsToCSV(elapsedSec, config); err != nil {
+		fmt.Printf("Failed to write results to CSV: %v\n", err)
+	}
 
 	if config.Result.GtPath != "" {
 		if err := bench.CheckRecall(config); err != nil {
 			fmt.Printf("Failed to check recall: %v\n", err)
 		}
-	}
-
-	bench.CollectStats(elapsedSec)
-	if err := bench.WriteResultsToCSV(elapsedSec, config); err != nil {
-		fmt.Printf("Failed to write results to CSV: %v\n", err)
 	}
 }

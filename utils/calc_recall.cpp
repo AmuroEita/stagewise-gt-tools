@@ -58,10 +58,11 @@ int main(int argc, char **argv) {
             return 1;
         }
         int32_t n, k;
-        fin.read(reinterpret_cast<char*>(&n), sizeof(int32_t));
-        fin.read(reinterpret_cast<char*>(&k), sizeof(int32_t));
+        fin.read(reinterpret_cast<char *>(&n), sizeof(int32_t));
+        fin.read(reinterpret_cast<char *>(&k), sizeof(int32_t));
         gold_std_vec.resize(n * k);
-        fin.read(reinterpret_cast<char*>(gold_std_vec.data()), n * k * sizeof(int32_t));
+        fin.read(reinterpret_cast<char *>(gold_std_vec.data()),
+                 n * k * sizeof(int32_t));
         if (dim_gs == 0)
             dim_gs = k;
         else if (k != dim_gs) {
@@ -80,10 +81,11 @@ int main(int argc, char **argv) {
             return 1;
         }
         int32_t n, k;
-        fin.read(reinterpret_cast<char*>(&n), sizeof(int32_t));
-        fin.read(reinterpret_cast<char*>(&k), sizeof(int32_t));
+        fin.read(reinterpret_cast<char *>(&n), sizeof(int32_t));
+        fin.read(reinterpret_cast<char *>(&k), sizeof(int32_t));
         our_results_vec.resize(n * k);
-        fin.read(reinterpret_cast<char*>(our_results_vec.data()), n * k * sizeof(int32_t));
+        fin.read(reinterpret_cast<char *>(our_results_vec.data()),
+                 n * k * sizeof(int32_t));
         if (dim_or == 0)
             dim_or = k;
         else if (k != dim_or) {

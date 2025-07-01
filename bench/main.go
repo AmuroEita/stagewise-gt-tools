@@ -14,9 +14,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/schollz/progressbar/v3"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
 )
@@ -68,6 +68,8 @@ type Bench struct {
 	config          *Config
 	insertPointCnt  int
 	searchPointCnt  int
+	globalInsertCnt int64
+	startTime       time.Time
 }
 
 func ConcurrentBench(index Index, config Config) *Bench {
@@ -82,9 +84,6 @@ func ConcurrentBench(index Index, config Config) *Bench {
 }
 
 func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config *Config) {
-	defer func() {
-		close(b.taskQueue)
-	}()
 	beginNum := config.Data.BeginNum
 	writeBatchSize := config.Data.WriteBatchSize
 	writeRatio := config.Workload.WriteRatio
@@ -93,20 +92,15 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 	insertTotal := len(data) / dim
 	numInsertBatches := (insertTotal - beginNum + writeBatchSize - 1) / writeBatchSize
 
-	if beginNum >= int(config.Data.MaxElements) {
-		fmt.Printf("BeginNum (%d) >= MaxElements (%d), skipping all tasks\n", beginNum, config.Data.MaxElements)
-		return
-	}
+	// fmt.Printf("insertTotal=%d, max_elements=%d\n", insertTotal, config.Data.MaxElements)
 
 	queryIdx := 0
 
 	for batchIdx := 0; batchIdx < numInsertBatches; batchIdx++ {
 		startInsertOffset := beginNum + batchIdx*writeBatchSize
-
 		if startInsertOffset >= int(config.Data.MaxElements) {
 			break
 		}
-
 		endInsertOffset := min(startInsertOffset+writeBatchSize, insertTotal)
 		if endInsertOffset > startInsertOffset {
 			task := Task{
@@ -155,24 +149,6 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 }
 
 func (b *Bench) ConsumeTasks(numWorkers int) {
-	totalInsert := int(b.config.Data.MaxElements) - b.config.Data.BeginNum
-	totalSearch := 0
-	bar := progressbar.NewOptions(
-		totalInsert+totalSearch,
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionShowBytes(false),
-		progressbar.OptionSetWidth(50),
-		progressbar.OptionSetDescription("Insert: 0/s, Search: 0/s"),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]=[reset]",
-			SaucerHead:    "[green]>[reset]",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
-	)
-	startTime := time.Now()
-
 	for i := 0; i < numWorkers; i++ {
 		b.wg.Add(1)
 		go func(workerId int) {
@@ -192,10 +168,23 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 						fmt.Printf("Insert error: %v\n", err)
 						continue
 					}
-					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Microseconds()))
+					b.insertLatencies = append(b.insertLatencies, float64(time.Since(start).Milliseconds()))
 					b.insertCnt++
 					b.insertPointCnt += len(task.Data)
-					bar.Add(len(task.Data))
+					atomic.AddInt64(&b.globalInsertCnt, int64(len(task.Data)))
+					if len(task.Tags) > 0 {
+						minTag := task.Tags[0]
+						maxTag := task.Tags[0]
+						for _, tag := range task.Tags {
+							if tag < minTag {
+								minTag = tag
+							}
+							if tag > maxTag {
+								maxTag = tag
+							}
+						}
+						// fmt.Printf("InsertTask: tag range [%d, %d], len=%d\n", minTag, maxTag, len(task.Tags))
+					}
 				case SearchTask:
 					if b.config.Workload.EnforceConsistency {
 						b.rwMu.RLock()
@@ -218,19 +207,31 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 						b.searchResults = append(b.searchResults, result)
 					}
 					b.resultsMu.Unlock()
-					b.searchLatencies = append(b.searchLatencies, float64(time.Since(start).Microseconds()))
+					b.searchLatencies = append(b.searchLatencies, float64(time.Since(start).Milliseconds()))
 					b.searchCnt++
 					b.searchPointCnt += len(task.Data)
-					bar.Add(len(task.Data))
-				}
-				elapsed := time.Since(startTime).Seconds()
-				if elapsed > 0 {
-					insertQPS := float64(b.insertPointCnt) / elapsed
-					searchQPS := float64(b.searchPointCnt) / elapsed
-					bar.Describe(fmt.Sprintf("Insert: %.0f/s, Search: %.0f/s", insertQPS, searchQPS))
 				}
 			}
 		}(i)
+	}
+}
+
+func (b *Bench) PrintProgress(totalInsert int) {
+	lastPercent := -1
+	for {
+		current := int(atomic.LoadInt64(&b.globalInsertCnt))
+		percent := current * 100 / totalInsert
+		if percent != lastPercent {
+			elapsed := time.Since(b.startTime).Seconds()
+			insertQPS := float64(current) / elapsed
+			searchQPS := float64(b.searchPointCnt) / elapsed
+			fmt.Printf("Progress: %d/%d (%d%%), Insert QPS: %.2f, Search QPS: %.2f\n", current, totalInsert, percent, insertQPS, searchQPS)
+			lastPercent = percent
+		}
+		if current >= totalInsert {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -258,8 +259,8 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 	if !fileExists {
 		header := []string{
 			"algorithm", "threads", "batch_size", "write_ratio",
-			"insert_p95_latency", "insert_p99_latency", "insert_mean_latency", "insert_qps",
-			"search_p95_latency", "search_p99_latency", "search_mean_latency", "search_qps",
+			"insert_p95_latency (ms)", "insert_p99_latency (ms)", "insert_mean_latency (ms)", "insert_qps",
+			"search_p95_latency (ms)", "search_p99_latency (ms)", "search_mean_latency (ms)", "search_qps",
 			"recall",
 		}
 		if err := writer.Write(header); err != nil {
@@ -289,13 +290,13 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 		fmt.Sprintf("%d", config.Workload.NumThreads),   // threads
 		fmt.Sprintf("%d", config.Data.WriteBatchSize),   // batch_size
 		fmt.Sprintf("%.2f", config.Workload.WriteRatio), // write_ratio
-		fmt.Sprintf("%.2f", insertP95),                  // insert_p95_latency
-		fmt.Sprintf("%.2f", insertP99),                  // insert_p99_latency
-		fmt.Sprintf("%.2f", insertMean),                 // insert_mean_latency
+		fmt.Sprintf("%.2f", insertP95),                  // insert_p95_latency_ms
+		fmt.Sprintf("%.2f", insertP99),                  // insert_p99_latency_ms
+		fmt.Sprintf("%.2f", insertMean),                 // insert_mean_latency_ms
 		fmt.Sprintf("%.2f", insertQPS),                  // insert_qps
-		fmt.Sprintf("%.2f", searchP95),                  // search_p95_latency
-		fmt.Sprintf("%.2f", searchP99),                  // search_p99_latency
-		fmt.Sprintf("%.2f", searchMean),                 // search_mean_latency
+		fmt.Sprintf("%.2f", searchP95),                  // search_p95_latency_ms
+		fmt.Sprintf("%.2f", searchP99),                  // search_p99_latency_ms
+		fmt.Sprintf("%.2f", searchMean),                 // search_mean_latency_ms
 		fmt.Sprintf("%.2f", searchQPS),                  // search_qps
 		fmt.Sprintf("0"),
 	}
@@ -319,7 +320,7 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 		b.stats.MeanInsertLatency = mean(b.insertLatencies)
 		p95 := percentile(b.insertLatencies, 0.95)
 		p99 := percentile(b.insertLatencies, 0.99)
-		fmt.Printf("Insert QPS: %.2f, Mean Insert Latency: %.2f us, P95: %.2f us, P99: %.2f us\n", b.stats.InsertQPS, b.stats.MeanInsertLatency, p95, p99)
+		fmt.Printf("Insert QPS: %.2f, Mean Insert Latency: %.2f ms, P95: %.2f ms, P99: %.2f ms\n", b.stats.InsertQPS, b.stats.MeanInsertLatency, p95, p99)
 	} else {
 		fmt.Println("No insert operations performed.")
 	}
@@ -328,7 +329,7 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 		b.stats.MeanSearchLatency = mean(b.searchLatencies)
 		p95 := percentile(b.searchLatencies, 0.95)
 		p99 := percentile(b.searchLatencies, 0.99)
-		fmt.Printf("Search QPS: %.2f, Mean Search Latency: %.2f us, P95: %.2f us, P99: %.2f us\n", b.stats.SearchQPS, b.stats.MeanSearchLatency, p95, p99)
+		fmt.Printf("Search QPS: %.2f, Mean Search Latency: %.2f ms, P95: %.2f ms, P99: %.2f ms\n", b.stats.SearchQPS, b.stats.MeanSearchLatency, p95, p99)
 	} else {
 		fmt.Println("No search operations performed.")
 	}
@@ -573,10 +574,14 @@ func main() {
 	bench = ConcurrentBench(index, *config)
 	bench.searchResults = make([]*internal.SearchResult, 0, config.Data.MaxElements)
 
+	fmt.Printf("Threads: %d, Insert data size: %d\n", config.Workload.NumThreads, int(config.Data.MaxElements)-config.Data.BeginNum)
+	fmt.Println("Start producing tasks and consuming tasks")
+
 	start := time.Now()
 
-	fmt.Println("Start producing tasks and consuming tasks")
+	bench.startTime = time.Now()
 	go bench.ProduceTasks(data, queries, dataDim, config)
+	go bench.PrintProgress(int(config.Data.MaxElements) - config.Data.BeginNum)
 	bench.ConsumeTasks(config.Workload.NumThreads)
 	bench.wg.Wait()
 	elapsedSec := time.Since(start).Seconds()

@@ -1,449 +1,358 @@
-#include <immintrin.h>
-
-#include <algorithm>
-#include <fstream>
 #include <iostream>
-#include <queue>
+#include <fstream>
+#include <vector>
+#include <algorithm>
+#include <getopt.h> 
 #include <stdexcept>
 #include <string>
-#include <thread>
-#include <vector>
+#include <queue>      
+#include <cmath>      
+#include <limits>    
+#include <cassert>    
+#include <utility>    
 
-using PointPair = std::pair<int, float>;
+const int PARTSIZE = 10000000;
+const int ALIGNMENT = 512; 
 
-float euclidean_distance_simd(const std::vector<float> &a,
-                              const std::vector<float> &b) {
-    if (a.size() != b.size())
-        throw std::runtime_error("Vector dimensions mismatch");
+template <class T>
+T div_round_up(const T numerator, const T denominator) {
+    return (numerator % denominator == 0) ? (numerator / denominator) : 1 + (numerator / denominator);
+}
 
-    size_t n = a.size();
+using pairIF = std::pair<size_t, float>;
+struct cmpmaxstruct {
+    bool operator()(const pairIF &l, const pairIF &r) const {
+        return l.second < r.second; 
+    }
+};
+
+using maxPQIFCS = std::priority_queue<pairIF, std::vector<pairIF>, cmpmaxstruct>;
+
+inline bool custom_dist(const std::pair<uint32_t, float> &a, const std::pair<uint32_t, float> &b) {
+    return a.second < b.second;
+}
+
+float manual_sdot(int N, const float *X, int incX, const float *Y, int incY) {
     float sum = 0.0f;
-    size_t i = 0;
-
-    if (n >= 8) {
-        __m256 sum_vec = _mm256_setzero_ps();
-        for (; i <= n - 8; i += 8) {
-            __m256 va = _mm256_loadu_ps(&a[i]);
-            __m256 vb = _mm256_loadu_ps(&b[i]);
-            __m256 diff = _mm256_sub_ps(va, vb);
-            sum_vec = _mm256_fmadd_ps(diff, diff, sum_vec);
-        }
-        float temp[8];
-        _mm256_storeu_ps(temp, sum_vec);
-        for (int j = 0; j < 8; ++j) {
-            sum += temp[j];
-        }
+    for (int i = 0; i < N; ++i) {
+        sum += X[i * incX] * Y[i * incY];
     }
-
-    for (; i < n; ++i) {
-        float diff = a[i] - b[i];
-        sum += diff * diff;
-    }
-
     return sum;
 }
 
-class IncrementalKNN {
-   private:
-    std::priority_queue<PointPair, std::vector<PointPair>, std::less<PointPair>>
-        max_heap;
-    size_t current_size;
-    int k;
-
-   public:
-    IncrementalKNN(int k) : current_size(0), k(k) {}
-
-    void add_new_vectors(const std::vector<std::vector<float>> &new_vectors,
-                         const std::vector<float> &query) {
-        for (const auto &vec : new_vectors) {
-            float dist = euclidean_distance_simd(query, vec);
-            if (max_heap.size() < static_cast<size_t>(k)) {
-                max_heap.emplace(dist, static_cast<int>(current_size++));
-            } else if (dist < max_heap.top().first) {
-                max_heap.pop();
-                max_heap.emplace(dist, static_cast<int>(current_size++));
-            } else {
-                current_size++;
+void manual_sgemm_dot_product_rows(
+    size_t M, size_t N, size_t K, float alpha,
+    const float *A, size_t ldA, 
+    const float *B, size_t ldB, 
+    float beta, float *C, size_t ldC 
+) {
+    for (size_t j = 0; j < N; ++j) { 
+        for (size_t i = 0; i < M; ++i) { 
+            float dot_prod = 0.0f;
+            for (size_t k = 0; k < K; ++k) { 
+                dot_prod += A[i * ldA + k] * B[j * ldB + k];
             }
+            C[i + j * ldC] = alpha * dot_prod + beta * C[i + j * ldC];
         }
     }
-
-    std::vector<PointPair> get_topk() {
-        std::vector<PointPair> topk;
-        topk.reserve(k);
-        while (!max_heap.empty()) {
-            topk.emplace_back(max_heap.top().second, max_heap.top().first);
-            max_heap.pop();
-        }
-        std::reverse(topk.begin(), topk.end());
-        return topk;
-    }
-
-    void reset() {
-        while (!max_heap.empty()) {
-            max_heap.pop();
-        }
-        current_size = 0;
-    }
-};
-
-std::vector<PointPair> exact_knn(const std::vector<float> &query,
-                                 const std::vector<std::vector<float>> &base,
-                                 size_t b_size, int k) {
-    using HeapPair = std::pair<float, int>;
-    std::priority_queue<HeapPair, std::vector<HeapPair>, std::less<HeapPair>>
-        max_heap;
-
-    for (size_t j = 0; j < b_size && j < base.size(); ++j) {
-        float dist = euclidean_distance_simd(query, base[j]);
-        if (max_heap.size() < static_cast<size_t>(k)) {
-            max_heap.emplace(dist, static_cast<int>(j));
-        } else if (dist < max_heap.top().first) {
-            max_heap.pop();
-            max_heap.emplace(dist, static_cast<int>(j));
-        }
-    }
-
-    std::vector<PointPair> topk;
-    topk.reserve(k);
-    while (!max_heap.empty()) {
-        topk.emplace_back(max_heap.top().second, max_heap.top().first);
-        max_heap.pop();
-    }
-    std::reverse(topk.begin(), topk.end());
-
-    return topk;
 }
 
-std::vector<std::vector<PointPair>> compute_batch_groundtruth(
-    const std::vector<std::vector<float>> &base,
-    const std::vector<std::vector<float>> &queries, size_t b_size, int k) {
-    if (!base.empty() && !queries.empty() &&
-        base[0].size() != queries[0].size()) {
-        throw std::runtime_error("Base and query vector dimensions mismatch");
-    }
-
-    std::vector<std::vector<PointPair>> results(queries.size());
-    size_t num_threads = std::thread::hardware_concurrency();
-    std::vector<std::thread> threads;
-    size_t chunk_size = (queries.size() + num_threads - 1) / num_threads;
-
-    auto worker = [&](size_t start, size_t end) {
-        IncrementalKNN knn(k);
-        for (size_t i = start; i < end && i < queries.size(); ++i) {
-            knn.reset();
-            knn.add_new_vectors(base, queries[i]);
-            results[i] = knn.get_topk();
+void manual_sgemm_add_outer_product(
+    size_t M, size_t N, float alpha,
+    const float *vec1, 
+    const float *vec2, 
+    float *C, size_t ldC 
+) {
+    for (size_t j = 0; j < N; ++j) {
+        for (size_t i = 0; i < M; ++i) {
+            C[i + j * ldC] += alpha * vec1[i] * vec2[j];
         }
-    };
-
-    for (size_t t = 0; t < num_threads; ++t) {
-        size_t start = t * chunk_size;
-        size_t end = std::min(start + chunk_size, queries.size());
-        threads.emplace_back(worker, start, end);
     }
-
-    for (auto &thread : threads) {
-        thread.join();
-    }
-
-    std::cout << "Computed groundtruth for base size " << b_size << std::endl;
-    return results;
 }
 
-std::vector<std::vector<float>> read_fvecs(const std::string &filename) {
-    std::ifstream in(filename, std::ios::binary);
-    if (!in.is_open())
-        throw std::runtime_error("Cannot open file: " + filename);
-
-    std::vector<std::vector<float>> data;
-    while (in.good()) {
-        int dim;
-        in.read(reinterpret_cast<char *>(&dim), sizeof(int));
-        if (!in.good()) break;
-
-        std::vector<float> vec_float(dim);
-        in.read(reinterpret_cast<char *>(vec_float.data()),
-                dim * sizeof(float));
-
-        std::vector<float> vec(dim);
-        for (int i = 0; i < dim; ++i) {
-            vec[i] = static_cast<float>(
-                std::min(std::max(vec_float[i], 0.0f), 255.0f));
-        }
-        data.push_back(vec);
+void compute_l2sq(float *const points_l2sq, const float *const matrix, const int64_t num_points, const uint64_t dim) {
+    assert(points_l2sq != NULL);
+#pragma omp parallel for schedule(static, 65536)
+    for (int64_t d = 0; d < num_points; ++d) {
+        points_l2sq[d] = manual_sdot((int64_t)dim, matrix + (ptrdiff_t)d * (ptrdiff_t)dim, 1,
+                                     matrix + (ptrdiff_t)d * (ptrdiff_t)dim, 1);
     }
-    in.close();
-    std::cout << "Read " << data.size() << " vectors from " << filename
+}
+
+void distsq_to_points(const size_t dim,
+                      float *dist_matrix, 
+                      size_t npoints, const float *const points,
+                      const float *const points_l2sq, 
+                      size_t nqueries, const float *const queries,
+                      const float *const queries_l2sq, 
+                      float *ones_vec = NULL)          
+{
+    bool ones_vec_alloc = false;
+    if (ones_vec == NULL) {
+        ones_vec = new float[nqueries > npoints ? nqueries : npoints];
+        std::fill_n(ones_vec, nqueries > npoints ? nqueries : npoints, (float)1.0);
+        ones_vec_alloc = true;
+    }
+
+    manual_sgemm_dot_product_rows(npoints, nqueries, dim, (float)-2.0, points, dim,
+                                  queries, dim, (float)0.0, dist_matrix, npoints);
+    manual_sgemm_add_outer_product(npoints, nqueries, (float)1.0, points_l2sq, ones_vec, dist_matrix, npoints);
+    manual_sgemm_add_outer_product(npoints, nqueries, (float)1.0, ones_vec, queries_l2sq, dist_matrix, npoints);
+
+    if (ones_vec_alloc)
+        delete[] ones_vec;
+}
+
+void exact_knn(const size_t dim, const size_t k,
+               size_t *const closest_points,      // k * num_queries preallocated, col major, queries columns
+               float *const dist_closest_points, // k * num_queries preallocated, Dist to corresponding closes_points
+               size_t npoints,
+               float *points_in, // points in Col major (actually row-major flat array)
+               size_t nqueries, float *queries_in,
+               float *points_l2sq = NULL, float *queries_l2sq = NULL) // queries in Col major (actually row-major flat array)
+{
+    bool points_l2sq_alloc = false;
+    if (points_l2sq == NULL) {
+        points_l2sq = new float[npoints];
+        compute_l2sq(points_l2sq, points_in, npoints, dim);
+        points_l2sq_alloc = true;
+    }
+
+    bool queries_l2sq_alloc = false;
+    if (queries_l2sq == NULL) {
+        queries_l2sq = new float[nqueries];
+        compute_l2sq(queries_l2sq, queries_in, nqueries, dim);
+        queries_l2sq_alloc = true;
+    }
+
+    float *points = points_in;
+    float *queries = queries_in;
+
+    std::cout << "Going to compute " << k << " NNs for " << nqueries << " queries over " << npoints << " points in "
+              << dim << " dimensions using L2 distance fn. " << std::endl;
+
+    size_t q_batch_size = (1 << 9);
+    float *dist_matrix = new float[(size_t)q_batch_size * (size_t)npoints];
+
+    for (size_t b = 0; b < div_round_up(nqueries, q_batch_size); ++b) {
+        int64_t q_b = b * q_batch_size;
+        int64_t q_e = ((b + 1) * q_batch_size > nqueries) ? nqueries : (b + 1) * q_batch_size;
+
+        distsq_to_points(dim, dist_matrix, npoints, points, points_l2sq, (size_t)(q_e - q_b),
+                         queries + (ptrdiff_t)q_b * (ptrdiff_t)dim, queries_l2sq + q_b);
+        
+        std::cout << "Computed distances for queries: [" << q_b << "," << q_e << ")" << std::endl;
+
+#pragma omp parallel for schedule(dynamic, 16)
+        for (long long q = q_b; q < q_e; q++) {
+            maxPQIFCS point_dist;
+            for (size_t p = 0; p < k; p++) {
+                point_dist.emplace(p, dist_matrix[(ptrdiff_t)p + (ptrdiff_t)(q - q_b) * (ptrdiff_t)npoints]);
+            }
+            for (size_t p = k; p < npoints; p++) {
+                if (point_dist.top().second > dist_matrix[(ptrdiff_t)p + (ptrdiff_t)(q - q_b) * (ptrdiff_t)npoints]) {
+                    point_dist.pop(); // Remove largest
+                    point_dist.emplace(p, dist_matrix[(ptrdiff_t)p + (ptrdiff_t)(q - q_b) * (ptrdiff_t)npoints]); // Add new smaller
+                }
+            }
+            // Extract results from priority queue (they are in reverse sorted order)
+            for (ptrdiff_t l = 0; l < (ptrdiff_t)k; ++l) {
+                closest_points[(ptrdiff_t)(k - 1 - l) + (ptrdiff_t)q * (ptrdiff_t)k] = point_dist.top().first;
+                dist_closest_points[(ptrdiff_t)(k - 1 - l) + (ptrdiff_t)q * (ptrdiff_t)k] = point_dist.top().second;
+                point_dist.pop();
+            }
+            assert(std::is_sorted(dist_closest_points + (ptrdiff_t)q * (ptrdiff_t)k,
+                                  dist_closest_points + (ptrdiff_t)(q + 1) * (ptrdiff_t)k));
+        }
+        std::cout << "Computed exact k-NN for queries: [" << q_b << "," << q_e << ")" << std::endl;
+    }
+
+    delete[] dist_matrix;
+
+    if (points_l2sq_alloc) {
+        delete[] points_l2sq;
+    }
+    if (queries_l2sq_alloc) {
+        delete[] queries_l2sq;
+    }
+}
+
+template <typename T>
+inline int get_num_parts(const char *filename) {
+    std::ifstream reader;
+    reader.exceptions(std::ios::failbit | std::ios::badbit);
+    reader.open(filename, std::ios::binary);
+    std::cout << "Reading bin file " << filename << " ...\n";
+    int npts_i32, ndims_i32;
+    reader.read(reinterpret_cast<char *>(&npts_i32), sizeof(int));
+    reader.read(reinterpret_cast<char *>(&ndims_i32), sizeof(int));
+    std::cout << "#pts = " << npts_i32 << ", #dims = " << ndims_i32 << std::endl;
+    reader.close();
+    uint32_t num_parts =
+        (npts_i32 % PARTSIZE) == 0 ? npts_i32 / PARTSIZE : (uint32_t)std::floor(npts_i32 / PARTSIZE) + 1;
+    std::cout << "Number of parts: " << num_parts << std::endl;
+    return num_parts;
+}
+
+template <typename T>
+inline void load_bin_as_float(const char *filename, float *&data, size_t &npts, size_t &ndims, int part_num) {
+    std::ifstream reader;
+    reader.exceptions(std::ios::failbit | std::ios::badbit);
+    reader.open(filename, std::ios::binary);
+    std::cout << "Reading bin file " << filename << " ...\n";
+    int npts_i32, ndims_i32;
+    reader.read(reinterpret_cast<char *>(&npts_i32), sizeof(int));
+    reader.read(reinterpret_cast<char *>(&ndims_i32), sizeof(int));
+    uint64_t start_id = (uint64_t)part_num * PARTSIZE;
+    uint64_t end_id = (std::min)(start_id + PARTSIZE, (uint64_t)npts_i32);
+    npts = end_id - start_id;
+    ndims = (uint64_t)ndims_i32;
+    std::cout << "#pts in part = " << npts << ", #dims = " << ndims << ", size = " << npts * ndims * sizeof(T) << "B"
               << std::endl;
-    return data;
-}
 
-void compute_and_save_full_groundtruth(
-    const std::vector<std::vector<float>> &base,
-    const std::vector<std::vector<float>> &queries, const std::string &filename,
-    int k) {
-    if (!base.empty() && !queries.empty() &&
-        base[0].size() != queries[0].size()) {
-        throw std::runtime_error("Base and query vector dimensions mismatch");
-    }
+    reader.seekg(start_id * ndims * sizeof(T) + 2 * sizeof(uint32_t), std::ios::beg);
+    T *data_T = new T[npts * ndims];
+    reader.read(reinterpret_cast<char *>(data_T), sizeof(T) * npts * ndims);
+    std::cout << "Finished reading part of the bin file." << std::endl;
+    reader.close();
 
-    std::vector<std::vector<PointPair>> results =
-        compute_batch_groundtruth(base, queries, base.size(), k);
-
-    size_t npts = queries.size();
-    size_t ndims = k;
-    std::vector<int32_t> data(npts * ndims);
-    std::vector<float> distances(npts * ndims);
-
-    for (size_t i = 0; i < npts; ++i) {
-        for (size_t j = 0; j < ndims; ++j) {
-            size_t idx = i * ndims + j;
-            data[idx] = results[i][j].first;
-            distances[idx] = results[i][j].second;
+    data = new float[npts * ndims];
+#pragma omp parallel for schedule(dynamic, 32768)
+    for (int64_t i = 0; i < (int64_t)npts; i++) {
+        for (int64_t j = 0; j < (int64_t)ndims; j++) {
+            data[i * ndims + j] = static_cast<float>(data_T[i * ndims + j]);
         }
     }
+    delete[] data_T;
+    std::cout << "Finished converting part data to float." << std::endl;
+}
 
+inline void save_groundtruth_as_one_file(const std::string filename, int32_t *data, float *distances, size_t npts,
+                                         size_t ndims) {
     std::ofstream writer(filename, std::ios::binary | std::ios::out);
-    if (!writer.is_open()) {
-        throw std::runtime_error("Failed to open file: " + filename);
-    }
+    writer.exceptions(std::ios::failbit | std::ios::badbit); // Enable exceptions for file operations
 
-    int npts_i32 = static_cast<int>(npts);
-    int ndims_i32 = static_cast<int>(ndims);
+    int npts_i32 = (int)npts, ndims_i32 = (int)ndims;
     writer.write(reinterpret_cast<char *>(&npts_i32), sizeof(int));
     writer.write(reinterpret_cast<char *>(&ndims_i32), sizeof(int));
-    std::cout << "Saving full groundtruth in one file (npts, dim, npts*dim "
-                 "id-matrix, "
-                 "npts*dim dist-matrix) with npts = "
-              << npts << ", dim = " << ndims << ", size = "
-              << 2 * npts * ndims * sizeof(int32_t) + 2 * sizeof(int) << "B"
-              << std::endl;
+    std::cout << "Saving truthset in one file (npts, dim, npts*dim id-matrix, "
+              "npts*dim dist-matrix) with npts = "
+              << npts << ", dim = " << ndims << ", size = " << 2 * npts * ndims * sizeof(uint32_t) + 2 * sizeof(int)
+              << "B" << std::endl;
 
-    writer.write(reinterpret_cast<char *>(data.data()),
-                 npts * ndims * sizeof(int32_t));
-    writer.write(reinterpret_cast<char *>(distances.data()),
-                 npts * ndims * sizeof(float));
-    writer.flush();
+    writer.write(reinterpret_cast<char *>(data), npts * ndims * sizeof(uint32_t));
+    writer.write(reinterpret_cast<char *>(distances), npts * ndims * sizeof(float));
     writer.close();
-
-    std::cout << "Finished writing full groundtruth to " << filename
-              << std::endl;
+    std::cout << "Finished writing truthset" << std::endl;
 }
 
-struct Args {
-    std::string base_path;
-    std::string query_path;
-    std::string batch_gt_path;
-    std::string gt_path;
-    int k = 20;
-    int increment = 10;
-    int chunk_size = 10000;
-    int num_threads = 0;
-};
+template <typename T>
+std::vector<std::vector<std::pair<uint32_t, float>>> processUnfilteredParts(const std::string &base_file,
+                                                                             size_t &nqueries, size_t &npoints,
+                                                                             size_t &dim, size_t &k, float *query_data) { 
+    float *base_data = nullptr;
+    int num_parts = get_num_parts<T>(base_file.c_str());
+    std::vector<std::vector<std::pair<uint32_t, float>>> res(nqueries);
+    for (int p = 0; p < num_parts; p++) {
+        size_t start_id = (size_t)p * PARTSIZE; 
+        load_bin_as_float<T>(base_file.c_str(), base_data, npoints, dim, p);
 
-void print_help() {
-    std::cout
-        << "Usage: compute_gt [options]\n"
-        << "Options:\n"
-        << "  --base_path PATH     Path to base vectors file (required)\n"
-        << "  --query_path PATH    Path to query vectors file (required)\n"
-        << "  --batch_gt_path PATH Path to save batch groundtruth (optional)\n"
-        << "  --gt_path PATH       Path to save full groundtruth (optional)\n"
-        << "  --k K                Number of nearest neighbors (default: 20)\n"
-        << "  --inc INCREMENT      Increment size for batch processing "
-           "(default: 10)\n"
-        << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
-        << "  --threads N          Number of threads to use (default: 0, use "
-           "system default)\n"
-        << "  --help               Show this help message\n"
-        << "\n"
-        << "Mode Description:\n"
-        << "  1. Standard GT mode: Use --gt_path argument\n"
-        << "     - Compute full groundtruth\n"
-        << "     - Output a single file containing K nearest neighbors for all "
-           "queries\n"
-        << "     - Suitable for standard evaluation\n"
-        << "\n"
-        << "  2. Batch mode: Use --batch_gt_path argument\n"
-        << "     - Incrementally compute groundtruth\n"
-        << "     - Output file contains multiple batches\n"
-        << "     - Suitable for large datasets and incremental evaluation\n"
-        << "\n"
-        << "Examples:\n"
-        << "  Standard GT mode:\n"
-        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path "
-           "data/sift_query.fvecs --k 20 --gt_path data/sift.gt20\n"
-        << "\n"
-        << "  Batch mode:\n"
-        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path "
-           "data/sift_query.fvecs --k 20 --batch_gt_path data/sift_batch.gt20\n"
-        << "\n"
-        << "  Use both modes:\n"
-        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path "
-           "data/sift_query.fvecs --k 20 --gt_path data/sift.gt20 "
-           "--batch_gt_path data/sift_batch.gt20\n";
+        size_t *closest_points_part = new size_t[nqueries * k];
+        float *dist_closest_points_part = new float[nqueries * k];
+
+        auto part_k = k < npoints ? k : npoints;
+        exact_knn(dim, part_k, closest_points_part, dist_closest_points_part, npoints, base_data, nqueries, query_data); 
+
+        for (size_t i = 0; i < nqueries; i++) {
+            for (size_t j = 0; j < part_k; j++) {
+                res[i].push_back(std::make_pair((uint32_t)(closest_points_part[i * k + j] + start_id),
+                                                 dist_closest_points_part[i * part_k + j]));
+            }
+        }
+
+        delete[] closest_points_part;
+        delete[] dist_closest_points_part;
+
+        delete[] base_data; 
+    }
+    return res;
 }
 
-Args parse_args(int argc, char *argv[]) {
-    Args args;
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--help" || arg == "--h" || arg == "-h") {
-            print_help();
-            exit(0);
-        } else if (arg == "--base_path" && i + 1 < argc)
-            args.base_path = argv[++i];
-        else if (arg == "--query_path" && i + 1 < argc)
-            args.query_path = argv[++i];
-        else if (arg == "--batch_gt_path" && i + 1 < argc)
-            args.batch_gt_path = argv[++i];
-        else if (arg == "--gt_path" && i + 1 < argc)
-            args.gt_path = argv[++i];
-        else if (arg == "--k" && i + 1 < argc)
-            args.k = std::stoi(argv[++i]);
-        else if (arg == "--inc" && i + 1 < argc)
-            args.increment = std::stoi(argv[++i]);
-        else if (arg == "--chunk_size" && i + 1 < argc)
-            args.chunk_size = std::stoi(argv[++i]);
-        else if (arg == "--threads" && i + 1 < argc)
-            args.num_threads = std::stoi(argv[++i]);
-        else {
-            std::cerr << "Error: Unknown argument '" << arg << "'" << std::endl;
-            std::cerr << "Use --help to see usage information" << std::endl;
-            exit(1);
+template <typename T>
+int aux_main_logic(const std::string &base_file, const std::string &query_file, const std::string &gt_file, size_t k) { // Removed metric parameter
+    size_t npoints, nqueries, dim;
+
+    float *query_data;
+
+    load_bin_as_float<T>(query_file.c_str(), query_data, nqueries, dim, 0);
+    if (nqueries > PARTSIZE)
+        std::cerr << "WARNING: #Queries provided (" << nqueries << ") is greater than " << PARTSIZE
+                  << ". Computing GT only for the first " << PARTSIZE << " queries." << std::endl;
+
+    int *closest_points = new int[nqueries * k];
+    float *dist_closest_points = new float[nqueries * k];
+
+    std::vector<std::vector<std::pair<uint32_t, float>>> results =
+        processUnfilteredParts<T>(base_file, nqueries, npoints, dim, k, query_data); // Removed metric parameter
+
+    for (size_t i = 0; i < nqueries; i++) {
+        std::vector<std::pair<uint32_t, float>> &cur_res = results[i];
+        std::sort(cur_res.begin(), cur_res.end(), custom_dist);
+        size_t j = 0;
+        for (auto iter : cur_res) {
+            if (j == k)
+                break;
+            closest_points[i * k + j] = (int32_t)iter.first;
+            dist_closest_points[i * k + j] = iter.second;
+            ++j;
         }
+        if (j < k)
+            std::cout << "WARNING: found less than k GT entries for query " << i << std::endl;
     }
-    return args;
+
+    save_groundtruth_as_one_file(gt_file, closest_points, dist_closest_points, nqueries, k);
+    delete[] closest_points;
+    delete[] dist_closest_points;
+    delete[] query_data; 
+
+    return 0;
 }
 
-int main(int argc, char *argv[]) {
-    Args args = parse_args(argc, argv);
+int main(int argc, char **argv) {
+    std::string base_file, query_file, gt_file;
+    int K = 0;
 
-    size_t num_threads = args.num_threads > 0
-                             ? static_cast<size_t>(args.num_threads)
-                             : std::thread::hardware_concurrency();
-
-    std::cout << "Using " << num_threads << " threads" << std::endl;
-    std::cout << "Starting computation..." << std::endl;
-
-    std::vector<std::vector<float>> base = read_fvecs(args.base_path);
-    std::vector<std::vector<float>> queries = read_fvecs(args.query_path);
-
-    std::cout << "Computing groundtruth for " << args.k << " nearest neighbors"
-              << std::endl;
-
-    if (!args.batch_gt_path.empty()) {
-        std::cout << "Attempting to open batch groundtruth file: "
-                  << args.batch_gt_path << std::endl;
-        std::ofstream out(args.batch_gt_path, std::ios::binary);
-        if (!out.is_open()) {
-            std::cerr << "Error: Failed to open file: " << args.batch_gt_path
-                      << std::endl;
-            throw std::runtime_error("Failed to open file: " +
-                                     args.batch_gt_path);
+    const char *const short_opts = "";
+    const option long_opts[] = {
+        {"base_file", required_argument, nullptr, 0},
+        {"query_file", required_argument, nullptr, 0},
+        {"gt_file", required_argument, nullptr, 0},
+        {"k", required_argument, nullptr, 0},
+        {nullptr, 0, nullptr, 0}}; 
+    int opt_idx = 0;
+    while (true) {
+        int opt = getopt_long(argc, argv, "", long_opts, &opt_idx);
+        if (opt == -1)
+            break;
+        if (opt == 0) { 
+            if (std::string(long_opts[opt_idx].name) == "base_file")
+                base_file = optarg;
+            else if (std::string(long_opts[opt_idx].name) == "query_file")
+                query_file = optarg;
+            else if (std::string(long_opts[opt_idx].name) == "gt_file")
+                gt_file = optarg;
+            else if (std::string(long_opts[opt_idx].name) == "k")
+                K = std::stoi(optarg);
         }
-        std::cout << "Successfully opened file for writing" << std::endl;
-
-        int n = static_cast<int>(queries.size());
-        int b = static_cast<int>((base.size() + args.increment - 1) /
-                                 args.increment);
-        out.write(reinterpret_cast<const char *>(&n), sizeof(int));
-        out.write(reinterpret_cast<const char *>(&args.k), sizeof(int));
-        out.write(reinterpret_cast<const char *>(&b), sizeof(int));
-
-        std::vector<std::vector<std::vector<PointPair>>> batch_results;
-        std::vector<int> batch_sizes;
-        batch_results.reserve(args.chunk_size);
-        batch_sizes.reserve(args.chunk_size);
-
-        size_t total_b = base.size();
-        size_t total_increments = total_b / args.increment;
-        size_t current_increment = 0;
-
-        for (size_t b_size = args.increment; b_size <= total_b;
-             b_size += args.increment) {
-            current_increment++;
-            int current_base_size = static_cast<int>(b_size);
-            batch_sizes.push_back(current_base_size);
-
-            std::vector<std::vector<PointPair>> current_batch_results(
-                queries.size());
-            std::vector<std::thread> threads;
-            size_t queries_per_thread =
-                (queries.size() + num_threads - 1) / num_threads;
-
-            auto worker = [&](size_t start, size_t end) {
-                IncrementalKNN knn(args.k);
-                for (size_t i = start; i < end && i < queries.size(); ++i) {
-                    knn.reset();
-                    std::vector<std::vector<float>> current_base(
-                        base.begin(), base.begin() + b_size);
-                    knn.add_new_vectors(current_base, queries[i]);
-                    current_batch_results[i] = knn.get_topk();
-                }
-            };
-
-            for (size_t t = 0; t < num_threads; ++t) {
-                size_t start = t * queries_per_thread;
-                size_t end =
-                    std::min(start + queries_per_thread, queries.size());
-                threads.emplace_back(worker, start, end);
-            }
-
-            for (auto &thread : threads) {
-                thread.join();
-            }
-
-            batch_results.push_back(std::move(current_batch_results));
-
-            std::cout << "Processed increment " << current_increment << "/"
-                      << total_increments << " ("
-                      << (current_increment * 100 / total_increments) << "%)"
-                      << " [base size: " << b_size << "]" << std::endl;
-
-            if (batch_results.size() >= static_cast<size_t>(args.chunk_size) ||
-                b_size + args.increment > total_b) {
-                std::cout << "Writing batch results for "
-                          << batch_results.size() << " increments to disk"
-                          << std::endl;
-
-                for (size_t i = 0; i < batch_results.size(); ++i) {
-                    out.write(reinterpret_cast<const char *>(&batch_sizes[i]),
-                              sizeof(int));
-
-                    for (const auto &result : batch_results[i]) {
-                        for (const auto &[id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&id),
-                                      sizeof(int));
-                        }
-                    }
-
-                    for (const auto &result : batch_results[i]) {
-                        for (const auto &[id, dist] : result) {
-                            out.write(reinterpret_cast<const char *>(&dist),
-                                      sizeof(float));
-                        }
-                    }
-                }
-
-                out.flush();
-                std::cout << "Flushed " << batch_results.size()
-                          << " increments to disk" << std::endl;
-
-                batch_results.clear();
-                batch_sizes.clear();
-            }
-        }
-        out.close();
-        std::cout << "Closed output file: " << args.batch_gt_path << std::endl;
     }
 
-    if (!args.gt_path.empty()) {
-        std::cout << "Processing full base size " << base.size()
-                  << " for full groundtruth" << std::endl;
-        compute_and_save_full_groundtruth(base, queries, args.gt_path, args.k);
+    if (base_file.empty() || query_file.empty() || gt_file.empty() || K <= 0) {
+        std::cout << "Usage: ./compute_gt --base_file BASE --query_file QUERY --gt_file GT --k K" << std::endl;
+        return 1;
     }
 
+    aux_main_logic<float>(base_file, query_file, gt_file, K);
+
+    std::cout << "Done. Saved groundtruth to " << gt_file << std::endl;
     return 0;
 }

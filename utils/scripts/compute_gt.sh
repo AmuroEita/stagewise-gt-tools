@@ -1,0 +1,1 @@
+../compute_gt  --base_file ../../../data/sift/sift_base.bin --query_file  ../../../data/sift/sift_query.bin --gt_file   ../../../data/sift/sift.gt20  --K 20

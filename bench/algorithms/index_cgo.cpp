@@ -104,6 +104,7 @@ int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
     auto index = static_cast<IndexBase<float>*>(index_ptr);
     QParams qparams(params.Ls, params.beam_width, params.alpha,
                     params.visit_limit);
+
     return index->batch_search(batch_queries, k, num_queries, batch_results);
 }
 

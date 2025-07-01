@@ -235,7 +235,7 @@ func (b *Bench) PrintProgress(totalInsert int) {
 	}
 }
 
-func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
+func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config, recall float64) error {
 	if err := os.MkdirAll(config.Result.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %v", err)
 	}
@@ -298,7 +298,7 @@ func (b *Bench) WriteResultsToCSV(elapsedSec float64, config *Config) error {
 		fmt.Sprintf("%.2f", searchP99),                  // search_p99_latency_ms
 		fmt.Sprintf("%.2f", searchMean),                 // search_mean_latency_ms
 		fmt.Sprintf("%.2f", searchQPS),                  // search_qps
-		fmt.Sprintf("0"),
+		fmt.Sprintf("%.3f", recall),                     // recall
 	}
 
 	if err := writer.Write(row); err != nil {
@@ -335,11 +335,11 @@ func (b *Bench) CollectStats(elapsedSec float64) {
 	}
 }
 
-func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error {
+func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) (float64, error) {
 	fmt.Println()
 	if config.Result.GtPath == "" || config.Result.RecallToolPath == "" {
 		fmt.Println("No ground truth or recall tool path provided, skipping recall check")
-		return nil
+		return 0, nil
 	}
 
 	fmt.Println("Calculating recall against ground truth...")
@@ -350,7 +350,7 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 	outPath := config.Result.SearchResPath
 	file, err := os.Create(outPath)
 	if err != nil {
-		return fmt.Errorf("failed to create result file: %v", err)
+		return 0, fmt.Errorf("failed to create result file: %v", err)
 	}
 	defer file.Close()
 
@@ -359,28 +359,32 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 	for i := 0; i < numQueries; i++ {
 		batchedQueries[i] = queries[i*dataDim : (i+1)*dataDim]
 	}
-	tags := make([][]uint32, numQueries)
-	for i := 0; i < numQueries; i++ {
-		res, err := b.index.(*internal.Index).Search(batchedQueries[i], uint(recallAt), internal.QueryParams{Ls: uint(Ls)})
-		if err != nil {
-			return fmt.Errorf("search error: %v", err)
+	tags, err := b.index.BatchSearch(batchedQueries, uint(recallAt), uint(Ls))
+	if err != nil {
+		return 0, fmt.Errorf("batch search error: %v", err)
+	}
+
+	for i := 0; i < numQueries && i < 5; i++ {
+		fmt.Printf("tags[%d]: ", i)
+		for j := 0; j < len(tags[i]) && j < 5; j++ {
+			fmt.Printf("%d ", tags[i][j])
 		}
-		tags[i] = res
+		fmt.Println()
 	}
 
 	n := int32(len(tags))
 	k := int32(len(tags[0]))
 	if err := binary.Write(file, binary.LittleEndian, n); err != nil {
-		return fmt.Errorf("failed to write n: %v", err)
+		return 0, fmt.Errorf("failed to write n: %v", err)
 	}
 	if err := binary.Write(file, binary.LittleEndian, k); err != nil {
-		return fmt.Errorf("failed to write k: %v", err)
+		return 0, fmt.Errorf("failed to write k: %v", err)
 	}
 	for i := 0; i < int(n); i++ {
 		for j := 0; j < int(k); j++ {
 			id := tags[i][j]
 			if err := binary.Write(file, binary.LittleEndian, id); err != nil {
-				return fmt.Errorf("failed to write id: %v", err)
+				return 0, fmt.Errorf("failed to write id: %v", err)
 			}
 		}
 	}
@@ -391,13 +395,24 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) error
 		config.Result.SearchResPath,
 		fmt.Sprintf("%d", recallAt),
 	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	output, err := cmd.CombinedOutput()
 	fmt.Printf("Running calc_recall: %s\n", strings.Join(cmd.Args, " "))
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run calc_recall: %v", err)
+	if err != nil {
+		return 0, fmt.Errorf("failed to run calc_recall: %v, output: %s", err, string(output))
 	}
-	return nil
+
+	recall := 0.0
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "recall@") && strings.Contains(line, "%") {
+			parts := strings.Split(line, "=")
+			if len(parts) == 2 {
+				fmt.Sscanf(parts[1], "%f%%", &recall)
+			}
+		}
+	}
+	fmt.Printf("Recall: %.4f%%\n", recall)
+	return recall, nil
 }
 
 func min(a, b int) int {
@@ -518,7 +533,7 @@ func main() {
 			Dim:         dataDim,
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
-			Lb:          config.Index.Lb,
+			Efc:         config.Index.Efc,
 			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}
@@ -528,7 +543,10 @@ func main() {
 			Dim:         dataDim,
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
-			Lb:          config.Index.Lb,
+			Efc:         config.Index.Efc,
+			LevelM:      config.Index.LevelM,
+			Alpha:       config.Index.Alpha,
+			VisitLimit:  config.Index.VisitLimit,
 			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}
@@ -580,7 +598,10 @@ func main() {
 	start := time.Now()
 
 	bench.startTime = time.Now()
-	go bench.ProduceTasks(data, queries, dataDim, config)
+	go func() {
+		bench.ProduceTasks(data, queries, dataDim, config)
+		close(bench.taskQueue)
+	}()
 	go bench.PrintProgress(int(config.Data.MaxElements) - config.Data.BeginNum)
 	bench.ConsumeTasks(config.Workload.NumThreads)
 	bench.wg.Wait()
@@ -588,14 +609,16 @@ func main() {
 
 	fmt.Println("Streaming bench done")
 
+	var recall float64 = 0
 	if config.Result.GtPath != "" {
-		if err := bench.CalcRecall(queries, dataDim, config); err != nil {
+		recall, err = bench.CalcRecall(queries, dataDim, config)
+		if err != nil {
 			fmt.Printf("Failed to check recall: %v\n", err)
 		}
 	}
 
 	bench.CollectStats(elapsedSec)
-	if err := bench.WriteResultsToCSV(elapsedSec, config); err != nil {
+	if err := bench.WriteResultsToCSV(elapsedSec, config, recall); err != nil {
 		fmt.Printf("Failed to write results to CSV: %v\n", err)
 	}
 }

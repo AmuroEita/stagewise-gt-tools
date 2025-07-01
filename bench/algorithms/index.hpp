@@ -9,14 +9,14 @@
 #include <vector>
 
 struct QParams {
-    size_t Ls = 100;
+    size_t Ls;
+    size_t beam_width;
+    float alpha;
+    size_t visit_limit;
+    float level_m;
 
     QParams() = default;
     QParams(size_t ls) : Ls(ls) {}
-
-    size_t beam_width = 10;
-    float alpha = 1.35;
-    size_t visit_limit = 1000;
 
     QParams(size_t ls, size_t beam_w, float a, size_t visit_lim)
         : Ls(ls), beam_width(beam_w), alpha(a), visit_limit(visit_lim) {}

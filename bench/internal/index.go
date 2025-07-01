@@ -33,6 +33,9 @@ type IndexParams struct {
 	MaxElements uint64
 	M           int
 	Lb          int
+	LevelM      float32
+	Alpha       float32
+	VisitLimit  int
 	Threads     int
 	DataType    DataType
 }
@@ -54,6 +57,8 @@ func NewIndex(indexType IndexType, params IndexParams) *Index {
 		max_elements: C.size_t(params.MaxElements),
 		M:            C.size_t(params.M),
 		Lb:           C.size_t(params.Lb),
+		LevelM:       C.float(params.LevelM),
+		Alpha:        C.float(params.Alpha),
 		num_threads:  C.size_t(params.Threads),
 	}
 	return &Index{

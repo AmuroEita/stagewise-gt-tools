@@ -1,9 +1,9 @@
 data:
   dataset_name: sift
   max_elements: 1000000
-  begin_num: 1000000
+  begin_num: 5000
   write_batch_size: 200
-  max_queries: 10000
+  max_queries: 1000
   data_type: float
   data_path: ../data/sift/sift_base.bin
   query_path: ../data/sift/sift_query.bin
@@ -11,7 +11,10 @@ data:
 index:
   index_type: parlayhnsw
   m: 32
-  lb: 200
+  efc: 200
+  level_m: 1.2
+  alpha: 1.35
+  visit_limit: 1000
 
 search:
   recall_at: 10
@@ -27,5 +30,6 @@ workload:
 
 result:
   output_dir: ./result
-  gt_path: ./result/gt.txt
-  batch_res_path: ./result/batch_res.txt
+  search_res_path: result/search_res.bin
+  gt_path: ../data/sift/sift.gt20
+  recall_tool_path: ../utils/build/calc_recall

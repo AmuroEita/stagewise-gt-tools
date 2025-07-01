@@ -90,7 +90,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
                                   query_params_.visit_limit,
                                   std::min<int>(index_->get_threshold_m(0),
                                                 3 * query_params_.visit_limit));
-        
+
         Range qpoints(batch_queries, num_queries, dim_);
         parlay::sequence<TagT> starts(1, 0);
 
@@ -100,10 +100,13 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             auto q = qpoints[i];
             auto results = parlayANN::beam_search_impl<uint32_t>(
                 q, graph, data_range_, starts, QP);
-            std::cerr << "results.first.first.size(): " << results.first.first.size() << std::endl;
+            std::cerr << "results.first.first.size(): "
+                      << results.first.first.size() << std::endl;
             for (size_t j = 0; j < k && j < results.first.first.size(); ++j) {
                 batch_results[i][j] = results.first.first[j].first;
-                std::cerr << "tag: " << results.first.first[j].first << ", dist: " << results.first.first[j].second << std::endl;
+                std::cerr << "tag: " << results.first.first[j].first
+                          << ", dist: " << results.first.first[j].second
+                          << std::endl;
             }
         });
         return 0;

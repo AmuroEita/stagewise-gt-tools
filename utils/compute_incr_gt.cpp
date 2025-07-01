@@ -197,9 +197,11 @@ void print_help() {
         << "  --query_path PATH    Path to query vectors file (required)\n"
         << "  --batch_gt_path PATH Path to save batch groundtruth (optional)\n"
         << "  --k K                Number of nearest neighbors (default: 20)\n"
-        << "  --inc INCREMENT      Increment size for batch processing (default: 10)\n"
+        << "  --inc INCREMENT      Increment size for batch processing "
+           "(default: 10)\n"
         << "  --chunk_size SIZE    Chunk size for processing (default: 10000)\n"
-        << "  --threads N          Number of threads to use (default: 0, use system default)\n"
+        << "  --threads N          Number of threads to use (default: 0, use "
+           "system default)\n"
         << "  --help               Show this help message\n"
         << "\n"
         << "Mode Description:\n"
@@ -210,7 +212,9 @@ void print_help() {
         << "\n"
         << "Examples:\n"
         << "  Batch mode:\n"
-        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path data/sift_query.fvecs --k 20 --batch_gt_path data/sift_batch.gt20\n";
+        << "    ./compute_gt --base_path data/sift_base.fvecs --query_path "
+           "data/sift_query.fvecs --k 20 --batch_gt_path "
+           "data/sift_batch.gt20\n";
 }
 
 Args parse_args(int argc, char *argv[]) {

@@ -27,9 +27,8 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
 
         auto params_ptr =
             std::make_shared<diskann::IndexWriteParameters>(params);
-        auto search_params_ptr =
-            std::make_shared<diskann::IndexSearchParams>(50, num_threads);
 
+        auto index_search_params = diskann::IndexSearchParams(50, num_threads_);
         auto index_config = diskann::IndexConfigBuilder()
             .with_metric(diskann::L2)
             .with_dimension(dim)
@@ -45,7 +44,7 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
             .with_label_type("uint32")
             .with_data_type("float")
             .with_index_write_params(params)
-            .with_index_search_params(*search_params_ptr)
+            .with_index_search_params(index_search_params)
             .with_data_load_store_strategy(diskann::DataStoreStrategy::MEMORY)
             .with_graph_load_store_strategy(diskann::GraphStoreStrategy::MEMORY)
             .build();
@@ -55,18 +54,17 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
             dynamic_cast<diskann::Index<T, TagT, TagT>*>(index_factory.create_instance().release())
         );
         index_->set_start_points_at_random(1.0f);
-
-        std::cout << "max_points = " << index_->get_max_points() << std::endl;
-        std::cout << "current_points = " << index_->get_num_points() << std::endl;
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
-        std::vector<TagT> tag_vec(tags, tags + num_points);
-        index_->build(data, num_points, tag_vec);
+#pragma omp parallel for num_threads(num_threads_)
+        for (size_t i = 0; i < num_points; i++) {
+            auto insert_result = index_->insert_point(data + i * dim_, tags[i] + 1);
+        }
     }
 
     int insert(const T* data, const TagT tag) override {
-        index_->insert_point(data, tag);
+        index_->insert_point(data, tag + 1);
         return 0;
     }
 
@@ -74,7 +72,7 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
                      size_t num_points) override {
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            index_->insert_point(batch_data + i * dim_, batch_tags[i]);
+            index_->insert_point(batch_data + i * dim_, batch_tags[i] + 1);
         }
         return 0;
     }
@@ -90,10 +88,6 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
-        for (size_t i = 0; i < num_queries; ++i) {
-            batch_results[i] = new TagT[k];
-        }
-
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_queries; ++i) {
             std::vector<TagT> tags_res(k);
@@ -104,7 +98,7 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
                                      tags_res.data(), nullptr, res_vectors);
 
             for (uint32_t j = 0; j < k; ++j) {
-                batch_results[i][j] = tags_res[j];
+                batch_results[i][j] = tags_res[j] - 1;
             }
         }
         return 0;

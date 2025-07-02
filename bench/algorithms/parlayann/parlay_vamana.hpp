@@ -86,7 +86,8 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
         query_params_ = params;
     }
 
-    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k,
+               std::vector<TagT>& result_tags) override {
         std::cerr << "ParlayVamana does not support dynamic single search"
                   << std::endl;
         return -1;

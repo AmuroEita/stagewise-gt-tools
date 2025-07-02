@@ -17,15 +17,17 @@ void* create_index(IndexType type, IndexParams params) {
     switch (type) {
         case INDEX_TYPE_HNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new HNSW<float>(params.max_elements, params.dim, 
-                    params.num_threads, params.M, params.ef_construction);
+                index = new HNSW<float>(params.max_elements, params.dim,
+                                        params.num_threads, params.M,
+                                        params.ef_construction);
             }
             break;
         case INDEX_TYPE_PARLAYHNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new ParlayHNSW<float>(params.max_elements, params.dim,
-                    params.num_threads, params.M, params.ef_construction,
-                    params.level_m, params.alpha, params.visit_limit);
+                index = new ParlayHNSW<float>(
+                    params.max_elements, params.dim, params.num_threads,
+                    params.M, params.ef_construction, params.level_m,
+                    params.alpha, params.visit_limit);
             }
             break;
         case INDEX_TYPE_VAMANA:
@@ -90,7 +92,7 @@ int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
 }
 
 int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
-                  size_t num_queries, uint32_t** batch_results) {
+                 size_t num_queries, uint32_t** batch_results) {
     if (!index_ptr || !batch_queries) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
     return index->batch_search(batch_queries, k, num_queries, batch_results);

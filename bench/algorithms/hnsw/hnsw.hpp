@@ -10,7 +10,8 @@
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {
    public:
-    HNSW(size_t max_elements,size_t dim, size_t num_threads, size_t M, size_t ef_construction)
+    HNSW(size_t max_elements, size_t dim, size_t num_threads, size_t M,
+         size_t ef_construction)
         : dim_(dim), num_threads_(num_threads), space(dim) {
         index_ = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
                                                  ef_construction);
@@ -44,7 +45,8 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         index_->setEf(params.ef_search);
     }
 
-    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k,
+               std::vector<TagT>& result_tags) override {
         auto result = index_->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);

@@ -49,8 +49,8 @@ void set_query_params(void* index_ptr, C_QueryParams params);
 int search(void* index_ptr, float* query, size_t k, uint32_t* res_tags);
 int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
                  size_t batch_size);
-int batch_search(void* index_ptr, float* batch_queries, uint32_t k, size_t num_queries,
-                 uint32_t** batch_results);
+int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
+                 size_t num_queries, uint32_t** batch_results);
 
 #ifdef __cplusplus
 }

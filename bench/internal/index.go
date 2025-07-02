@@ -29,14 +29,14 @@ const (
 )
 
 type IndexParams struct {
-	Dim         int
-	MaxElements uint64
-	M           int
-	EfConstruction          int
-	LevelM      float32
-	Alpha       float32
-	Threads     int
-	DataType    DataType
+	Dim            int
+	MaxElements    uint64
+	M              int
+	EfConstruction int
+	LevelM         float32
+	Alpha          float32
+	Threads        int
+	DataType       DataType
 }
 
 type QueryParams struct {
@@ -52,13 +52,13 @@ type Index struct {
 
 func NewIndex(indexType IndexType, params IndexParams) *Index {
 	cParams := C.IndexParams{
-		dim:          C.size_t(params.Dim),
-		max_elements: C.size_t(params.MaxElements),
-		M:            C.size_t(params.M),
-		EfConstruction:           C.size_t(params.EfConstruction),
-		LevelM:       C.float(params.LevelM),
-		Alpha:        C.float(params.Alpha),
-		num_threads:  C.size_t(params.Threads),
+		dim:            C.size_t(params.Dim),
+		max_elements:   C.size_t(params.MaxElements),
+		M:              C.size_t(params.M),
+		EfConstruction: C.size_t(params.EfConstruction),
+		LevelM:         C.float(params.LevelM),
+		Alpha:          C.float(params.Alpha),
+		num_threads:    C.size_t(params.Threads),
 	}
 	return &Index{
 		ptr: C.create_index(C.IndexType(indexType), cParams),

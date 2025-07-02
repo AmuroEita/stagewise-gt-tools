@@ -20,8 +20,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     using Range = parlayANN::PointRange<Point>;
     using desc = parlayANN::Desc_HNSW<T, Point>;
 
-    ParlayHNSW(size_t max_elements, size_t dim, size_t num_threads, 
-               size_t M, size_t ef_construction, float m_l, float alpha,
+    ParlayHNSW(size_t max_elements, size_t dim, size_t num_threads, size_t M,
+               size_t ef_construction, float m_l, float alpha,
                size_t visit_limit)
         : dim_(dim),
           graph_degree_(M),
@@ -77,7 +77,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
         beam_width_ = params.beam_width;
     }
 
-    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k,
+               std::vector<TagT>& result_tags) override {
         std::cerr << "ParlayHNSW does not support dynamic single search"
                   << std::endl;
         return -1;
@@ -85,9 +86,9 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
-        parlayANN::QueryParams QP(k, beam_width_, 1.35, visit_limit_,
-                                  std::min<int>(index_->get_threshold_m(0),
-                                                3 * visit_limit_));
+        parlayANN::QueryParams QP(
+            k, beam_width_, 1.35, visit_limit_,
+            std::min<int>(index_->get_threshold_m(0), 3 * visit_limit_));
         Range qpoints(batch_queries, num_queries, dim_);
         parlay::sequence<TagT> starts(1, 0);
 

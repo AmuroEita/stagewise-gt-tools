@@ -22,7 +22,7 @@ search:
   visit_limit: 1000
 
 workload:
-  write_ratio: 0.5
+  write_ratio: 0.9
   num_threads: 48
   queue_size: 100000
   query_new_data: false

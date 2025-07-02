@@ -597,8 +597,18 @@ func main() {
 			Threads:        config.Workload.NumThreads,
 			DataType:       internal.DataTypeFloat,
 		}
-
 		index = internal.NewIndex(internal.IndexTypeParlayVamana, params)
+	case "vamana":
+		params := internal.IndexParams{
+			Dim:            dataDim,
+			MaxElements:    config.Data.MaxElements,
+			M:              config.Index.M,
+			EfConstruction: config.Index.EfConstruction,
+			Alpha:          config.Index.Alpha,
+			Threads:        config.Workload.NumThreads,
+			DataType:       internal.DataTypeFloat,
+		}
+		index = internal.NewIndex(internal.IndexTypeVamana, params)
 	default:
 		log.Fatalf("Unsupported index type: %s\n", config.Index.IndexType)
 	}

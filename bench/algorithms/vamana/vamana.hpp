@@ -12,8 +12,8 @@
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class Vamana : public IndexBase<T, TagT, LabelT> {
    public:
-    Vamana(size_t max_elements, size_t dim, size_t num_threads, 
-           size_t M, size_t ef_construction, float alpha)
+    Vamana(size_t max_elements, size_t dim, size_t num_threads, size_t M,
+           size_t ef_construction, float alpha)
         : dim_(dim), num_threads_(num_threads) {
         diskann::Metric metric = diskann::L2;
 

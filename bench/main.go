@@ -589,15 +589,15 @@ func main() {
 		index = internal.NewIndex(internal.IndexTypeParlayHNSW, params)
 	case "parlayvamana":
 		params := internal.IndexParams{
-			Dim:         dataDim,
-			MaxElements: config.Data.MaxElements,
-			M:           config.Index.M,
+			Dim:            dataDim,
+			MaxElements:    config.Data.MaxElements,
+			M:              config.Index.M,
 			EfConstruction: config.Index.EfConstruction,
-			Alpha:         config.Index.Alpha,
-			Threads:     config.Workload.NumThreads,
-			DataType:    internal.DataTypeFloat,
+			Alpha:          config.Index.Alpha,
+			Threads:        config.Workload.NumThreads,
+			DataType:       internal.DataTypeFloat,
 		}
-		
+
 		index = internal.NewIndex(internal.IndexTypeParlayVamana, params)
 	default:
 		log.Fatalf("Unsupported index type: %s\n", config.Index.IndexType)

@@ -36,15 +36,16 @@ void* create_index(IndexType type, IndexParams params) {
             std::cout << "Create ParlayVamana index" << std::endl;
             if (params.data_type == DATA_TYPE_FLOAT) {
                 index = new ParlayVamana<float>(
-                    params.max_elements, params.dim, params.num_threads, 
+                    params.max_elements, params.dim, params.num_threads,
                     params.M, params.ef_construction, params.alpha);
             }
             break;
         case INDEX_TYPE_VAMANA:
             std::cout << "Create Vamana index" << std::endl;
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new Vamana<float>(params.max_elements, params.dim, params.num_threads,
-                params.M, params.ef_construction, params.alpha);
+                index = new Vamana<float>(params.max_elements, params.dim,
+                                          params.num_threads, params.M,
+                                          params.ef_construction, params.alpha);
             }
             break;
         default:

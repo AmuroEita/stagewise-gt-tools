@@ -32,10 +32,9 @@ type IndexParams struct {
 	Dim         int
 	MaxElements uint64
 	M           int
-	Lb          int
+	EfConstruction          int
 	LevelM      float32
 	Alpha       float32
-	VisitLimit  int
 	Threads     int
 	DataType    DataType
 }
@@ -56,7 +55,7 @@ func NewIndex(indexType IndexType, params IndexParams) *Index {
 		dim:          C.size_t(params.Dim),
 		max_elements: C.size_t(params.MaxElements),
 		M:            C.size_t(params.M),
-		Lb:           C.size_t(params.Lb),
+		EfConstruction:           C.size_t(params.EfConstruction),
 		LevelM:       C.float(params.LevelM),
 		Alpha:        C.float(params.Alpha),
 		num_threads:  C.size_t(params.Threads),
@@ -123,7 +122,7 @@ func (i *Index) Insert(point []float32, tag uint32) error {
 
 func (i *Index) SetQueryParams(params QueryParams) {
 	cParams := C.C_QParams{
-		Ls:          C.size_t(params.Ls),
+		EfSearch:    C.size_t(params.EfSearch),
 		beam_width:  C.size_t(params.BeamWidth),
 		alpha:       C.float(params.Alpha),
 		visit_limit: C.size_t(params.VisitLimit),
@@ -134,7 +133,7 @@ func (i *Index) SetQueryParams(params QueryParams) {
 func (i *Index) Search(query []float32, k uint, params QueryParams) ([]uint32, error) {
 	results := make([]uint32, k)
 	cParams := C.C_QParams{
-		Ls:          C.size_t(params.Ls),
+		EfSearch:    C.size_t(params.EfSearch),
 		beam_width:  C.size_t(params.BeamWidth),
 		alpha:       C.float(params.Alpha),
 		visit_limit: C.size_t(params.VisitLimit),

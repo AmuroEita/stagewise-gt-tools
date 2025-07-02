@@ -56,10 +56,9 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
         return 0;
     }
 
-    void set_query_params(const QParams& params) override { Ls_ = params.Ls; }
+    void set_query_params(const QParams& params) override { Ls_ = params.ef_search; }
 
-    int search(const T* query, size_t k, const QParams& params,
-               std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
         return 0;
     }
 

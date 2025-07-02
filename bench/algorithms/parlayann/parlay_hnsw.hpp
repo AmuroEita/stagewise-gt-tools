@@ -20,9 +20,9 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     using Range = parlayANN::PointRange<Point>;
     using desc = parlayANN::Desc_HNSW<T, Point>;
 
-    ParlayHNSW(size_t dim, size_t max_elements, size_t M,
-               size_t ef_construction, float m_l, float alpha,
-               size_t num_threads)
+    ParlayHNSW(size_t max_elements, size_t dim, size_t num_threads, 
+               size_t M, size_t ef_construction, float m_l, float alpha,
+               size_t visit_limit)
         : dim_(dim),
           graph_degree_(M),
           ef_construction_(ef_construction),
@@ -73,11 +73,11 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     }
 
     void set_query_params(const QParams& params) override {
-        query_params_ = params;
+        visit_limit_ = params.visit_limit;
+        beam_width_ = params.beam_width;
     }
 
-    int search(const T* query, size_t k, const QParams& params,
-               std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
         std::cerr << "ParlayHNSW does not support dynamic single search"
                   << std::endl;
         return -1;
@@ -85,11 +85,9 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
-        parlayANN::QueryParams QP(k, query_params_.beam_width,
-                                  query_params_.alpha,
-                                  query_params_.visit_limit,
+        parlayANN::QueryParams QP(k, beam_width_, 1.35, visit_limit_,
                                   std::min<int>(index_->get_threshold_m(0),
-                                                3 * query_params_.visit_limit));
+                                                3 * visit_limit_));
         
         Range qpoints(batch_queries, num_queries, dim_);
         parlay::sequence<TagT> starts(1, 0);
@@ -117,6 +115,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
     uint32_t ef_construction_;
     float m_l_;
     float alpha_;
+    size_t visit_limit_;
+    size_t beam_width_;
     size_t num_threads_;
     size_t max_elements_;
     size_t total_points_;

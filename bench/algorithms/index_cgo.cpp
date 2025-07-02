@@ -17,32 +17,27 @@ void* create_index(IndexType type, IndexParams params) {
     switch (type) {
         case INDEX_TYPE_HNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index =
-                    new HNSW<float>(params.dim, params.max_elements, params.M,
-                                    params.Lb, params.num_threads);
+                index = new HNSW<float>(params.max_elements, params.dim, 
+                    params.num_threads, params.M, params.ef_construction);
             }
             break;
         case INDEX_TYPE_PARLAYHNSW:
             if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new ParlayHNSW<float>(params.dim, params.max_elements,
-                                              params.M, params.Lb, 1.15f, 1.15f,
-                                              params.num_threads);
+                index = new ParlayHNSW<float>(params.max_elements, params.dim,
+                    params.num_threads, params.M, params.ef_construction,
+                    params.level_m, params.alpha, params.visit_limit);
             }
             break;
         case INDEX_TYPE_VAMANA:
-            if (params.data_type == DATA_TYPE_FLOAT) {
-                index =
-                    new Vamana<float>(params.dim, params.max_elements, params.M,
-                                      params.Lb, 1.2f, params.num_threads);
-            }
-            break;
+            // if (params.data_type == DATA_TYPE_FLOAT) {
+            //     index = new Vamana<float>(params);
+            // }
+            // break;
         case INDEX_TYPE_PARLAYVAMANA:
-            if (params.data_type == DATA_TYPE_FLOAT) {
-                index = new ParlayVamana<float>(params.dim, params.max_elements,
-                                                params.M, params.Lb, 1.0f, 1.2f,
-                                                false, params.num_threads);
-            }
-            break;
+            // if (params.data_type == DATA_TYPE_FLOAT) {
+            //     index = new ParlayVamana<float>(params);
+            // }
+            // break;
         default:
             return nullptr;
     }
@@ -68,22 +63,19 @@ int insert(void* index_ptr, float* point, uint32_t tag) {
     return index->insert(point, tag);
 }
 
-void set_query_params(void* index_ptr, C_QParams params) {
+void set_query_params(void* index_ptr, C_QueryParams params) {
     if (!index_ptr) return;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
-    QParams qparams(params.Ls, params.beam_width, params.alpha,
+    QParams qparams(params.ef_search, params.beam_width, params.alpha,
                     params.visit_limit);
     index->set_query_params(qparams);
 }
 
-int search(void* index_ptr, float* query, size_t k, C_QParams params,
-           uint32_t* res_tags) {
+int search(void* index_ptr, float* query, size_t k, uint32_t* res_tags) {
     if (!index_ptr || !query || !res_tags) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
     std::vector<uint32_t> results;
-    QParams qparams(params.Ls, params.beam_width, params.alpha,
-                    params.visit_limit);
-    index->search(query, k, qparams, results);
+    index->search(query, k, results);
     for (size_t i = 0; i < results.size(); ++i) {
         res_tags[i] = results[i];
     }
@@ -98,13 +90,9 @@ int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
 }
 
 int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
-                 C_QParams params, size_t num_queries,
-                 uint32_t** batch_results) {
+                  size_t num_queries, uint32_t** batch_results) {
     if (!index_ptr || !batch_queries) return -1;
     auto index = static_cast<IndexBase<float>*>(index_ptr);
-    QParams qparams(params.Ls, params.beam_width, params.alpha,
-                    params.visit_limit);
-
     return index->batch_search(batch_queries, k, num_queries, batch_results);
 }
 

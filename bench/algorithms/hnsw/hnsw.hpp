@@ -10,8 +10,7 @@
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {
    public:
-    HNSW(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
-         size_t num_threads)
+    HNSW(size_t max_elements,size_t dim, size_t num_threads, size_t M, size_t ef_construction)
         : dim_(dim), num_threads_(num_threads), space(dim) {
         index_ = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
                                                  ef_construction);
@@ -42,12 +41,10 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
 
     void set_query_params(const QParams& params) override {
         query_params_ = params;
-        index_->setEf(params.Ls);
+        index_->setEf(params.ef_search);
     }
 
-    int search(const T* query, size_t k, const QParams& params,
-               std::vector<TagT>& result_tags) override {
-        index_->setEf(params.Ls);
+    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
         auto result = index_->searchKnn(query, k);
         while (!result.empty()) {
             result_tags.push_back(result.top().second);
@@ -58,8 +55,6 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
-        index_->setEf(query_params_.Ls);
-
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_queries; ++i) {
             auto result = index_->searchKnn(batch_queries + i * dim_, k);

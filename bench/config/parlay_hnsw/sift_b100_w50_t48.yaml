@@ -11,14 +11,15 @@ data:
 index:
   index_type: parlayhnsw
   m: 32
-  efc: 200
+  ef_construction: 200
   level_m: 1.2
   alpha: 1.35
-  visit_limit: 1000
 
 search:
   recall_at: 10
-  ls: 50
+  ef_search: 50
+  beam_width: 50
+  visit_limit: 1000
 
 workload:
   write_ratio: 1

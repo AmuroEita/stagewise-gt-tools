@@ -25,30 +25,31 @@ typedef struct {
     size_t dim;
     size_t max_elements;
     size_t M;
-    size_t Lb;
-    DataType data_type;
+    size_t ef_construction;
+    float level_m;
+    float alpha;
+    size_t visit_limit;
     size_t num_threads;
+    DataType data_type;
 } IndexParams;
 
 typedef struct {
-    size_t Ls;
+    size_t ef_search;
     size_t beam_width;
     float alpha;
     size_t visit_limit;
-} C_QParams;
+} C_QueryParams;
 
 void* create_index(IndexType type, IndexParams params);
 void destroy_index(void* index_ptr);
 
 int build(void* index_ptr, float* data, uint32_t* tags, size_t num_points);
 int insert(void* index_ptr, float* point, uint32_t tag);
-void set_query_params(void* index_ptr, C_QParams params);
-int search(void* index_ptr, float* query, size_t k, C_QParams params,
-           uint32_t* res_tags);
+void set_query_params(void* index_ptr, C_QueryParams params);
+int search(void* index_ptr, float* query, size_t k, uint32_t* res_tags);
 int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
                  size_t batch_size);
-int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
-                 C_QParams params, size_t num_queries,
+int batch_search(void* index_ptr, float* batch_queries, uint32_t k, size_t num_queries,
                  uint32_t** batch_results);
 
 #ifdef __cplusplus

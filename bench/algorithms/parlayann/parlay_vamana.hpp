@@ -86,8 +86,7 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
         query_params_ = params;
     }
 
-    int search(const T* query, size_t k, const QParams& params,
-               std::vector<TagT>& result_tags) override {
+    int search(const T* query, size_t k, std::vector<TagT>& result_tags) override {
         std::cerr << "ParlayVamana does not support dynamic single search"
                   << std::endl;
         return -1;
@@ -95,7 +94,7 @@ class ParlayVamana : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) {
-        QueryParams QP(k, query_params_.Ls, query_params_.alpha,
+        QueryParams QP(k, query_params_.ef_search, query_params_.alpha,
                        static_cast<long>(total_points_),
                        static_cast<long>(graph_degree_));
         Range query_points(reinterpret_cast<const float*>(batch_queries),

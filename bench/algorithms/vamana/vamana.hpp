@@ -30,25 +30,26 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
 
         auto index_search_params = diskann::IndexSearchParams(50, num_threads_);
         auto index_config = diskann::IndexConfigBuilder()
-            .with_metric(diskann::L2)
-            .with_dimension(dim)
-            .with_max_points(max_elements)
-            .is_dynamic_index(true)
-            .is_enable_tags(true)
-            .is_use_opq(false)
-            .is_filtered(false)
-            .with_num_pq_chunks(0)
-            .is_pq_dist_build(false)
-            .with_num_frozen_pts(1)
-            .with_tag_type("uint32")
-            .with_label_type("uint32")
-            .with_data_type("float")
-            .with_index_write_params(params)
-            .with_index_search_params(index_search_params)
-            .with_data_load_store_strategy(diskann::DataStoreStrategy::MEMORY)
-            .with_graph_load_store_strategy(diskann::GraphStoreStrategy::MEMORY)
-            .build();
-
+                                .with_metric(diskann::L2)
+                                .with_dimension(dim)
+                                .with_max_points(max_elements)
+                                .is_dynamic_index(true)
+                                .is_enable_tags(true)
+                                .is_use_opq(false)
+                                .is_filtered(false)
+                                .with_num_pq_chunks(0)
+                                .is_pq_dist_build(false)
+                                .with_num_frozen_pts(1)
+                                .with_tag_type("uint32")
+                                .with_label_type("uint32")
+                                .with_data_type("float")
+                                .with_index_write_params(params)
+                                .with_index_search_params(index_search_params)
+                                .with_data_load_store_strategy(
+                                    diskann::DataStoreStrategy::MEMORY)
+                                .with_graph_load_store_strategy(
+                                    diskann::GraphStoreStrategy::MEMORY)
+                                .build();
 
         diskann::IndexFactory index_factory(index_config);
         index_ = std::unique_ptr<diskann::Index<T, TagT, TagT>>(
@@ -60,7 +61,8 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
     void build(const T* data, const TagT* tags, size_t num_points) override {
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            auto insert_result = index_->insert_point(data + i * dim_, tags[i] + 1);
+            auto insert_result =
+                index_->insert_point(data + i * dim_, tags[i] + 1);
         }
     }
 

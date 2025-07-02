@@ -148,7 +148,7 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 }
 
 func (b *Bench) ConsumeTasks(numWorkers int) {
-	
+
 	b.index.SetQueryParams(internal.QueryParams{
 		EfSearch:   uint(b.config.Search.EfSearch),
 		BeamWidth:  uint(b.config.Search.BeamWidth),

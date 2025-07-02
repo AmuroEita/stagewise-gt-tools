@@ -52,14 +52,14 @@ type Index struct {
 
 func NewIndex(indexType IndexType, params IndexParams) *Index {
 	cParams := C.IndexParams{
-		dim:            C.size_t(params.Dim),
-		max_elements:   C.size_t(params.MaxElements),
-		M:              C.size_t(params.M),
+		dim:             C.size_t(params.Dim),
+		max_elements:    C.size_t(params.MaxElements),
+		M:               C.size_t(params.M),
 		ef_construction: C.size_t(params.EfConstruction),
 		level_m:         C.float(params.LevelM),
-		alpha:          C.float(params.Alpha),
-		num_threads:    C.size_t(params.Threads),
-		data_type:      C.DataType(params.DataType),
+		alpha:           C.float(params.Alpha),
+		num_threads:     C.size_t(params.Threads),
+		data_type:       C.DataType(params.DataType),
 	}
 	return &Index{
 		ptr: C.create_index(C.IndexType(indexType), cParams),

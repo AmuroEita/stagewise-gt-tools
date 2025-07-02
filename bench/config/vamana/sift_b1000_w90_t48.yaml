@@ -1,0 +1,35 @@
+data:
+  dataset_name: sift
+  max_elements: 1000000
+  begin_num: 5000
+  write_batch_size: 1000
+  max_queries: 1000
+  data_type: float
+  data_path: ../data/sift/sift_base.bin
+  query_path: ../data/sift/sift_query.bin
+
+index:
+  index_type: vamana
+  m: 24
+  ef_construction: 200
+  alpha: 1.2
+
+search:
+  recall_at: 10
+  ef_search: 40
+  beam_width: 40
+  visit_limit: 1000
+
+workload:
+  write_ratio: 0.1
+  num_threads: 48
+  queue_size: 100000
+  query_new_data: false
+  input_rate: 100000
+  enforce_consistency: true
+
+result:
+  output_dir: ./result
+  search_res_path: result/search_res.bin
+  gt_path: ../data/sift/sift.gt20
+  recall_tool_path: ../utils/build/calc_recall

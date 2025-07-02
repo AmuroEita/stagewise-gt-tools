@@ -12,8 +12,8 @@
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class Vamana : public IndexBase<T, TagT, LabelT> {
    public:
-    Vamana(size_t dim, size_t max_elements, size_t M, size_t ef_construction,
-           float alpha, size_t num_threads)
+    Vamana(size_t max_elements, size_t dim, size_t num_threads, size_t M,
+           size_t ef_construction, float alpha)
         : dim_(dim), num_threads_(num_threads) {
         diskann::Metric metric = diskann::L2;
 
@@ -27,23 +27,47 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
 
         auto params_ptr =
             std::make_shared<diskann::IndexWriteParameters>(params);
-        auto search_params_ptr =
-            std::make_shared<diskann::IndexSearchParams>(Ls_, num_threads);
 
-        index_ = std::make_unique<diskann::Index<T, TagT, TagT>>(
-            metric, dim_, max_elements, params_ptr, search_params_ptr, 0, true,
-            true, false, false, 0, false);
+        auto index_search_params = diskann::IndexSearchParams(50, num_threads_);
+        auto index_config = diskann::IndexConfigBuilder()
+                                .with_metric(diskann::L2)
+                                .with_dimension(dim)
+                                .with_max_points(max_elements)
+                                .is_dynamic_index(true)
+                                .is_enable_tags(true)
+                                .is_use_opq(false)
+                                .is_filtered(false)
+                                .with_num_pq_chunks(0)
+                                .is_pq_dist_build(false)
+                                .with_num_frozen_pts(1)
+                                .with_tag_type("uint32")
+                                .with_label_type("uint32")
+                                .with_data_type("float")
+                                .with_index_write_params(params)
+                                .with_index_search_params(index_search_params)
+                                .with_data_load_store_strategy(
+                                    diskann::DataStoreStrategy::MEMORY)
+                                .with_graph_load_store_strategy(
+                                    diskann::GraphStoreStrategy::MEMORY)
+                                .build();
+
+        diskann::IndexFactory index_factory(index_config);
+        index_ = std::unique_ptr<diskann::Index<T, TagT, TagT>>(
+            dynamic_cast<diskann::Index<T, TagT, TagT>*>(
+                index_factory.create_instance().release()));
+        index_->set_start_points_at_random(1.0f);
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            index_->insert_point(data + i * dim_, tags[i]);
+            auto insert_result =
+                index_->insert_point(data + i * dim_, tags[i] + 1);
         }
     }
 
     int insert(const T* data, const TagT tag) override {
-        index_->insert_point(data, tag);
+        index_->insert_point(data, tag + 1);
         return 0;
     }
 
@@ -51,7 +75,7 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
                      size_t num_points) override {
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_points; i++) {
-            index_->insert_point(batch_data + i * dim_, batch_tags[i]);
+            index_->insert_point(batch_data + i * dim_, batch_tags[i] + 1);
         }
         return 0;
     }
@@ -67,10 +91,6 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
-        for (size_t i = 0; i < num_queries; ++i) {
-            batch_results[i] = new TagT[k];
-        }
-
 #pragma omp parallel for num_threads(num_threads_)
         for (size_t i = 0; i < num_queries; ++i) {
             std::vector<TagT> tags_res(k);
@@ -81,7 +101,7 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
                                      tags_res.data(), nullptr, res_vectors);
 
             for (uint32_t j = 0; j < k; ++j) {
-                batch_results[i][j] = tags_res[j];
+                batch_results[i][j] = tags_res[j] - 1;
             }
         }
         return 0;
@@ -89,7 +109,7 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
 
     uint32_t L_;
     uint32_t R_;
-    uint32_t Ls_ = 100;
+    uint32_t Ls_;
     float alpha_;
     size_t dim_;
     size_t num_threads_;

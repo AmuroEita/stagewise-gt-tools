@@ -17,6 +17,7 @@ const (
 	IndexTypeHNSW IndexType = iota
 	IndexTypeParlayHNSW
 	IndexTypeParlayVamana
+	IndexTypeVamana
 	IndexTypeCCHNSW
 )
 

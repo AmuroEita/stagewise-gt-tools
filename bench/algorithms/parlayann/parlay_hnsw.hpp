@@ -109,7 +109,7 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
                 batch_results[i][j] = results.first.first[j].first;
                 // std::cerr << "tag: " << results.first.first[j].first
                 //           << ", dist: " << results.first.first[j].second
-                        //   << std::endl;
+                //   << std::endl;
             }
         });
         return 0;

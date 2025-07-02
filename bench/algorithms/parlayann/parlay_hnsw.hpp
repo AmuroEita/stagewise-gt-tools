@@ -103,13 +103,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             auto q = qpoints[i];
             auto results = parlayANN::beam_search_impl<uint32_t>(
                 q, graph, data_range_, starts, QP);
-            // std::cerr << "results.first.first.size(): "
-            //           << results.first.first.size() << std::endl;
             for (size_t j = 0; j < k && j < results.first.first.size(); ++j) {
                 batch_results[i][j] = results.first.first[j].first;
-                // std::cerr << "tag: " << results.first.first[j].first
-                //           << ", dist: " << results.first.first[j].second
-                //   << std::endl;
             }
         });
         return 0;

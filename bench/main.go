@@ -351,6 +351,13 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) (floa
 
 	fmt.Println("Calculating recall against ground truth...")
 
+	b.index.SetQueryParams(internal.QueryParams{
+		EfSearch:   uint(b.config.Search.EfSearch),
+		BeamWidth:  uint(b.config.Search.BeamWidth),
+		Alpha:      b.config.Search.Alpha,
+		VisitLimit: uint(b.config.Search.VisitLimit),
+	})
+
 	recallAt := config.Search.RecallAt
 
 	outPath := config.Result.SearchResPath
@@ -513,6 +520,23 @@ func loadConfig(filename string) (*Config, error) {
 	return config, nil
 }
 
+func finishBench(bench *Bench, queries []float32, dataDim int, config *Config, start time.Time) {
+	elapsedSec := time.Since(start).Seconds()
+	fmt.Println("Streaming bench done")
+	var recall float64 = 0
+	var err error
+	if config.Result.GtPath != "" {
+		recall, err = bench.CalcRecall(queries, dataDim, config)
+		if err != nil {
+			fmt.Printf("Failed to check recall: %v\n", err)
+		}
+	}
+	bench.CollectStats(elapsedSec)
+	if err := bench.WriteResultsToCSV(elapsedSec, config, recall); err != nil {
+		fmt.Printf("Failed to write results to CSV: %v\n", err)
+	}
+}
+
 func main() {
 	configPath := flag.String("config", "config/config.yaml", "config file path")
 	flag.Parse()
@@ -568,9 +592,12 @@ func main() {
 			Dim:         dataDim,
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
+			EfConstruction: config.Index.EfConstruction,
+			Alpha:         config.Index.Alpha,
 			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}
+		
 		index = internal.NewIndex(internal.IndexTypeParlayVamana, params)
 	default:
 		log.Fatalf("Unsupported index type: %s\n", config.Index.IndexType)
@@ -594,11 +621,6 @@ func main() {
 		fmt.Println("Index Built")
 	}
 
-	if beginNum >= int(config.Data.MaxElements) {
-		fmt.Printf("BeginNum (%d) >= MaxElements (%d), no benchmark needed\n", beginNum, config.Data.MaxElements)
-		return
-	}
-
 	var bench *Bench
 	bench = ConcurrentBench(index, *config)
 	bench.searchResults = make([]*internal.SearchResult, 0, config.Data.MaxElements)
@@ -608,6 +630,11 @@ func main() {
 
 	start := time.Now()
 
+	if beginNum >= int(config.Data.MaxElements) {
+		finishBench(bench, queries, dataDim, config, start)
+		return
+	}
+
 	bench.startTime = time.Now()
 	go func() {
 		bench.ProduceTasks(data, queries, dataDim, config)
@@ -616,20 +643,5 @@ func main() {
 	go bench.PrintProgress(int(config.Data.MaxElements) - config.Data.BeginNum)
 	bench.ConsumeTasks(config.Workload.NumThreads)
 	bench.wg.Wait()
-	elapsedSec := time.Since(start).Seconds()
-
-	fmt.Println("Streaming bench done")
-
-	var recall float64 = 0
-	if config.Result.GtPath != "" {
-		recall, err = bench.CalcRecall(queries, dataDim, config)
-		if err != nil {
-			fmt.Printf("Failed to check recall: %v\n", err)
-		}
-	}
-
-	bench.CollectStats(elapsedSec)
-	if err := bench.WriteResultsToCSV(elapsedSec, config, recall); err != nil {
-		fmt.Printf("Failed to write results to CSV: %v\n", err)
-	}
+	finishBench(bench, queries, dataDim, config, start)
 }

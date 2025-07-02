@@ -49,10 +49,11 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
             .with_graph_load_store_strategy(diskann::GraphStoreStrategy::MEMORY)
             .build();
 
+
         diskann::IndexFactory index_factory(index_config);
         index_ = std::unique_ptr<diskann::Index<T, TagT, TagT>>(
-            dynamic_cast<diskann::Index<T, TagT, TagT>*>(index_factory.create_instance().release())
-        );
+            dynamic_cast<diskann::Index<T, TagT, TagT>*>(
+                index_factory.create_instance().release()));
         index_->set_start_points_at_random(1.0f);
     }
 

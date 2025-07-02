@@ -31,33 +31,36 @@ class Vamana : public IndexBase<T, TagT, LabelT> {
             std::make_shared<diskann::IndexSearchParams>(50, num_threads);
 
         auto index_config = diskann::IndexConfigBuilder()
-            .with_metric(diskann::L2)
-            .with_dimension(dim)
-            .with_max_points(max_elements)
-            .is_dynamic_index(true)
-            .is_enable_tags(true)
-            .is_use_opq(false)
-            .is_filtered(false)
-            .with_num_pq_chunks(0)
-            .is_pq_dist_build(false)
-            .with_num_frozen_pts(1)
-            .with_tag_type("uint32")
-            .with_label_type("uint32")
-            .with_data_type("float")
-            .with_index_write_params(params)
-            .with_index_search_params(*search_params_ptr)
-            .with_data_load_store_strategy(diskann::DataStoreStrategy::MEMORY)
-            .with_graph_load_store_strategy(diskann::GraphStoreStrategy::MEMORY)
-            .build();
+                                .with_metric(diskann::L2)
+                                .with_dimension(dim)
+                                .with_max_points(max_elements)
+                                .is_dynamic_index(true)
+                                .is_enable_tags(true)
+                                .is_use_opq(false)
+                                .is_filtered(false)
+                                .with_num_pq_chunks(0)
+                                .is_pq_dist_build(false)
+                                .with_num_frozen_pts(1)
+                                .with_tag_type("uint32")
+                                .with_label_type("uint32")
+                                .with_data_type("float")
+                                .with_index_write_params(params)
+                                .with_index_search_params(*search_params_ptr)
+                                .with_data_load_store_strategy(
+                                    diskann::DataStoreStrategy::MEMORY)
+                                .with_graph_load_store_strategy(
+                                    diskann::GraphStoreStrategy::MEMORY)
+                                .build();
 
         diskann::IndexFactory index_factory(index_config);
         index_ = std::unique_ptr<diskann::Index<T, TagT, TagT>>(
-            dynamic_cast<diskann::Index<T, TagT, TagT>*>(index_factory.create_instance().release())
-        );
+            dynamic_cast<diskann::Index<T, TagT, TagT>*>(
+                index_factory.create_instance().release()));
         index_->set_start_points_at_random(1.0f);
 
         std::cout << "max_points = " << index_->get_max_points() << std::endl;
-        std::cout << "current_points = " << index_->get_num_points() << std::endl;
+        std::cout << "current_points = " << index_->get_num_points()
+                  << std::endl;
     }
 
     void build(const T* data, const TagT* tags, size_t num_points) override {

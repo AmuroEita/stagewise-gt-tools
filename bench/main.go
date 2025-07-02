@@ -34,7 +34,6 @@ type Task struct {
 	Tags      []uint32
 	QueryIdx  uint32
 	RecallAt  uint32
-	Ls        uint32
 	Timestamp time.Time
 }
 
@@ -47,8 +46,9 @@ type Stat struct {
 
 type Index interface {
 	BatchInsert(data [][]float32, tags []uint32) error
-	BatchSearch(queries [][]float32, recallAt, Ls uint) ([][]uint32, error)
+	BatchSearch(queries [][]float32, recallAt uint32) ([][]uint32, error)
 	Build(data [][]float32, tags []uint32) error
+	SetQueryParams(params internal.QueryParams)
 }
 
 type Bench struct {
@@ -140,7 +140,6 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 				Data:      batchQueries,
 				Tags:      batchTags,
 				RecallAt:  config.Search.RecallAt,
-				Ls:        config.Search.Ls,
 				Timestamp: time.Now(),
 			}
 			b.searchCnt += len(batchQueries)
@@ -149,6 +148,14 @@ func (b *Bench) ProduceTasks(data []float32, queries []float32, dim int, config 
 }
 
 func (b *Bench) ConsumeTasks(numWorkers int) {
+	
+	b.index.SetQueryParams(internal.QueryParams{
+		EfSearch:   uint(b.config.Search.EfSearch),
+		BeamWidth:  uint(b.config.Search.BeamWidth),
+		Alpha:      b.config.Search.Alpha,
+		VisitLimit: uint(b.config.Search.VisitLimit),
+	})
+
 	for i := 0; i < numWorkers; i++ {
 		b.wg.Add(1)
 		go func(workerId int) {
@@ -189,7 +196,7 @@ func (b *Bench) ConsumeTasks(numWorkers int) {
 					if b.config.Workload.EnforceConsistency {
 						b.rwMu.RLock()
 					}
-					results, err := b.index.BatchSearch(task.Data, uint(task.RecallAt), uint(task.Ls))
+					results, err := b.index.BatchSearch(task.Data, uint32(task.RecallAt))
 					if b.config.Workload.EnforceConsistency {
 						b.rwMu.RUnlock()
 					}
@@ -345,7 +352,6 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) (floa
 	fmt.Println("Calculating recall against ground truth...")
 
 	recallAt := config.Search.RecallAt
-	Ls := config.Search.Ls
 
 	outPath := config.Result.SearchResPath
 	file, err := os.Create(outPath)
@@ -359,7 +365,7 @@ func (b *Bench) CalcRecall(queries []float32, dataDim int, config *Config) (floa
 	for i := 0; i < numQueries; i++ {
 		batchedQueries[i] = queries[i*dataDim : (i+1)*dataDim]
 	}
-	tags, err := b.index.BatchSearch(batchedQueries, uint(recallAt), uint(Ls))
+	tags, err := b.index.BatchSearch(batchedQueries, uint32(recallAt))
 	if err != nil {
 		return 0, fmt.Errorf("batch search error: %v", err)
 	}
@@ -458,14 +464,21 @@ type Config struct {
 	} `yaml:"data"`
 
 	Index struct {
-		IndexType string `yaml:"index_type"`
-		M         int    `yaml:"m"`
-		Lb        int    `yaml:"lb"`
+		IndexType      string  `yaml:"index_type"`
+		M              int     `yaml:"m"`
+		EfConstruction int     `yaml:"ef_construction"`
+		LevelM         float32 `yaml:"level_m"`
+		Alpha          float32 `yaml:"alpha"`
+		VisitLimit     int     `yaml:"visit_limit"`
+		Lb             int     `yaml:"lb"`
 	} `yaml:"index"`
 
 	Search struct {
-		RecallAt uint32 `yaml:"recall_at"`
-		Ls       uint32 `yaml:"ls"`
+		RecallAt   uint32  `yaml:"recall_at"`
+		EfSearch   uint32  `yaml:"ef_search"`
+		BeamWidth  uint32  `yaml:"beam_width"`
+		Alpha      float32 `yaml:"alpha"`
+		VisitLimit uint32  `yaml:"visit_limit"`
 	} `yaml:"search"`
 
 	Workload struct {
@@ -530,25 +543,24 @@ func main() {
 	switch config.Index.IndexType {
 	case "hnsw":
 		params := internal.IndexParams{
-			Dim:         dataDim,
-			MaxElements: config.Data.MaxElements,
-			M:           config.Index.M,
-			Efc:         config.Index.Efc,
-			Threads:     config.Workload.NumThreads,
-			DataType:    internal.DataTypeFloat,
+			Dim:            dataDim,
+			MaxElements:    config.Data.MaxElements,
+			M:              config.Index.M,
+			EfConstruction: config.Index.EfConstruction,
+			Threads:        config.Workload.NumThreads,
+			DataType:       internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeHNSW, params)
 	case "parlayhnsw":
 		params := internal.IndexParams{
-			Dim:         dataDim,
-			MaxElements: config.Data.MaxElements,
-			M:           config.Index.M,
-			Efc:         config.Index.Efc,
-			LevelM:      config.Index.LevelM,
-			Alpha:       config.Index.Alpha,
-			VisitLimit:  config.Index.VisitLimit,
-			Threads:     config.Workload.NumThreads,
-			DataType:    internal.DataTypeFloat,
+			Dim:            dataDim,
+			MaxElements:    config.Data.MaxElements,
+			M:              config.Index.M,
+			EfConstruction: config.Index.EfConstruction,
+			LevelM:         config.Index.LevelM,
+			Alpha:          config.Index.Alpha,
+			Threads:        config.Workload.NumThreads,
+			DataType:       internal.DataTypeFloat,
 		}
 		index = internal.NewIndex(internal.IndexTypeParlayHNSW, params)
 	case "parlayvamana":
@@ -556,7 +568,6 @@ func main() {
 			Dim:         dataDim,
 			MaxElements: config.Data.MaxElements,
 			M:           config.Index.M,
-			Lb:          config.Index.Lb,
 			Threads:     config.Workload.NumThreads,
 			DataType:    internal.DataTypeFloat,
 		}

@@ -40,7 +40,7 @@ type IndexParams struct {
 }
 
 type QueryParams struct {
-	Ls         uint
+	EfSearch   uint
 	BeamWidth  uint
 	Alpha      float32
 	VisitLimit uint
@@ -55,10 +55,11 @@ func NewIndex(indexType IndexType, params IndexParams) *Index {
 		dim:            C.size_t(params.Dim),
 		max_elements:   C.size_t(params.MaxElements),
 		M:              C.size_t(params.M),
-		EfConstruction: C.size_t(params.EfConstruction),
-		LevelM:         C.float(params.LevelM),
-		Alpha:          C.float(params.Alpha),
+		ef_construction: C.size_t(params.EfConstruction),
+		level_m:         C.float(params.LevelM),
+		alpha:          C.float(params.Alpha),
 		num_threads:    C.size_t(params.Threads),
+		data_type:      C.DataType(params.DataType),
 	}
 	return &Index{
 		ptr: C.create_index(C.IndexType(indexType), cParams),
@@ -121,8 +122,8 @@ func (i *Index) Insert(point []float32, tag uint32) error {
 }
 
 func (i *Index) SetQueryParams(params QueryParams) {
-	cParams := C.C_QParams{
-		EfSearch:    C.size_t(params.EfSearch),
+	cParams := C.C_QueryParams{
+		ef_search:   C.size_t(params.EfSearch),
 		beam_width:  C.size_t(params.BeamWidth),
 		alpha:       C.float(params.Alpha),
 		visit_limit: C.size_t(params.VisitLimit),
@@ -130,19 +131,12 @@ func (i *Index) SetQueryParams(params QueryParams) {
 	C.set_query_params(i.ptr, cParams)
 }
 
-func (i *Index) Search(query []float32, k uint, params QueryParams) ([]uint32, error) {
+func (i *Index) Search(query []float32, k uint) ([]uint32, error) {
 	results := make([]uint32, k)
-	cParams := C.C_QParams{
-		EfSearch:    C.size_t(params.EfSearch),
-		beam_width:  C.size_t(params.BeamWidth),
-		alpha:       C.float(params.Alpha),
-		visit_limit: C.size_t(params.VisitLimit),
-	}
 	result := C.search(
 		i.ptr,
 		(*C.float)(&query[0]),
 		C.size_t(k),
-		cParams,
 		(*C.uint32_t)(&results[0]),
 	)
 	if result != 0 {
@@ -179,7 +173,7 @@ func (i *Index) BatchInsert(batchData [][]float32, batchTags []uint32) error {
 	return nil
 }
 
-func (i *Index) BatchSearch(queries [][]float32, k, Ls uint) ([][]uint32, error) {
+func (i *Index) BatchSearch(queries [][]float32, k uint32) ([][]uint32, error) {
 	if len(queries) == 0 {
 		return nil, nil
 	}
@@ -206,18 +200,10 @@ func (i *Index) BatchSearch(queries [][]float32, k, Ls uint) ([][]uint32, error)
 		ptrSlice[j] = p
 	}
 
-	cParams := C.C_QParams{
-		Ls:          C.size_t(Ls),
-		beam_width:  0,
-		alpha:       0,
-		visit_limit: 0,
-	}
-
 	result := C.batch_search(
 		i.ptr,
 		(*C.float)(&flatQueries[0]),
 		C.uint32_t(k),
-		cParams,
 		C.size_t(len(queries)),
 		(**C.uint32_t)(resultPtrsC),
 	)

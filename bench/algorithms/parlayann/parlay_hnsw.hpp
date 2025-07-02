@@ -41,6 +41,9 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
         auto ps = parlay::delayed_seq<Point>(
             total_points_, [this](size_t i) { return data_range_[i]; });
+        std::cerr << "m_l: " << m_l_ << ", graph_degree: " << graph_degree_
+                  << ", ef_construction: " << ef_construction_
+                  << ", alpha: " << alpha_ << std::endl;
 
         index_ = std::make_unique<ANN::HNSW<desc>>(ps.begin(), ps.end(), dim_,
                                                    m_l_, graph_degree_,
@@ -86,6 +89,8 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
+        std::cerr << "beam_width: " << beam_width_
+                  << ", visit_limit: " << visit_limit_ << std::endl;
         parlayANN::QueryParams QP(
             k, beam_width_, 1.35, visit_limit_,
             std::min<int>(index_->get_threshold_m(0), 3 * visit_limit_));
@@ -98,13 +103,13 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
             auto q = qpoints[i];
             auto results = parlayANN::beam_search_impl<uint32_t>(
                 q, graph, data_range_, starts, QP);
-            std::cerr << "results.first.first.size(): "
-                      << results.first.first.size() << std::endl;
+            // std::cerr << "results.first.first.size(): "
+            //           << results.first.first.size() << std::endl;
             for (size_t j = 0; j < k && j < results.first.first.size(); ++j) {
                 batch_results[i][j] = results.first.first[j].first;
-                std::cerr << "tag: " << results.first.first[j].first
-                          << ", dist: " << results.first.first[j].second
-                          << std::endl;
+                // std::cerr << "tag: " << results.first.first[j].first
+                //           << ", dist: " << results.first.first[j].second
+                        //   << std::endl;
             }
         });
         return 0;

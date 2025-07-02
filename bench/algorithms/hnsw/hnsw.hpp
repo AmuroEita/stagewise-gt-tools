@@ -41,7 +41,6 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     }
 
     void set_query_params(const QParams& params) override {
-        query_params_ = params;
         index_->setEf(params.ef_search);
     }
 
@@ -78,5 +77,4 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     size_t dim_;
     hnswlib::L2Space space;
     hnswlib::HierarchicalNSW<T>* index_;
-    QParams query_params_;
 };

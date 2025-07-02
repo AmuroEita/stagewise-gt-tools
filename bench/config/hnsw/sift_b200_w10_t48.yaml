@@ -11,11 +11,11 @@ data:
 index:
   index_type: hnsw
   m: 24
-  lb: 200
+  ef_construction: 200
 
 search:
   recall_at: 10
-  ls: 40
+  ef_search: 40
 
 workload:
   write_ratio: 0.1

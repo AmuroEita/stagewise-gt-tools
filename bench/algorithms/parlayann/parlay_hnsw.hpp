@@ -89,8 +89,6 @@ class ParlayHNSW : public IndexBase<T, TagT, LabelT> {
 
     int batch_search(const T* batch_queries, uint32_t k, size_t num_queries,
                      TagT** batch_results) override {
-        std::cerr << "beam_width: " << beam_width_
-                  << ", visit_limit: " << visit_limit_ << std::endl;
         parlayANN::QueryParams QP(
             k, beam_width_, 1.35, visit_limit_,
             std::min<int>(index_->get_threshold_m(0), 3 * visit_limit_));

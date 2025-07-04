@@ -214,3 +214,12 @@ func (i *Index) BatchSearch(queries [][]float32, k uint32) ([][]uint32, error) {
 	}
 	return results, nil
 }
+
+func (i *Index) SaveCCStat(path string) {
+	if i.ptr == nil {
+		return
+	}
+	cpath := C.CString(path)
+	defer C.free(unsafe.Pointer(cpath))
+	C.save_stat(i.ptr, cpath)
+}

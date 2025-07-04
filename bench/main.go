@@ -11,11 +11,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
@@ -502,6 +506,7 @@ type Config struct {
 		GtPath         string `yaml:"gt_path"`
 		SearchResPath  string `yaml:"search_res_path"`
 		RecallToolPath string `yaml:"recall_tool_path"`
+		CCStatPath     string `yaml:"cc_stat_path"`
 	} `yaml:"result"`
 }
 
@@ -535,9 +540,17 @@ func finishBench(bench *Bench, queries []float32, dataDim int, config *Config, s
 	if err := bench.WriteResultsToCSV(elapsedSec, config, recall); err != nil {
 		fmt.Printf("Failed to write results to CSV: %v\n", err)
 	}
+
+	if config.Result.CCStatPath != "" {
+		if saver, ok := bench.index.(interface{ SaveCCStat(string) }); ok {
+			saver.SaveCCStat(config.Result.CCStatPath)
+			fmt.Printf("CC stat saved to %s\n", config.Result.CCStatPath)
+		}
+	}
 }
 
 func main() {
+	runtime.SetMutexProfileFraction(1)
 	configPath := flag.String("config", "config/config.yaml", "config file path")
 	flag.Parse()
 
@@ -634,6 +647,10 @@ func main() {
 	var bench *Bench
 	bench = ConcurrentBench(index, *config)
 	bench.searchResults = make([]*internal.SearchResult, 0, config.Data.MaxElements)
+
+	go func() {
+		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+	}()
 
 	fmt.Printf("Threads: %d, Insert data size: %d\n", config.Workload.NumThreads, int(config.Data.MaxElements)-config.Data.BeginNum)
 	fmt.Println("Start producing tasks and consuming tasks")

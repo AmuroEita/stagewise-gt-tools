@@ -106,4 +106,9 @@ int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
     return index->batch_search(batch_queries, k, num_queries, batch_results);
 }
 
+void save_stat(void* index_ptr, const char* filename) {
+    auto index = static_cast<IndexBase<float>*>(index_ptr);
+    index->save_stat(std::string(filename));
+}
+
 }  // extern "C"

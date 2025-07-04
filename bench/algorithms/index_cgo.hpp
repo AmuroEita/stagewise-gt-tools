@@ -52,6 +52,8 @@ int batch_insert(void* index_ptr, float* batch_data, uint32_t* batch_tags,
 int batch_search(void* index_ptr, float* batch_queries, uint32_t k,
                  size_t num_queries, uint32_t** batch_results);
 
+void save_stat(void* index_ptr, const char* filename);
+
 #ifdef __cplusplus
 }
 #endif

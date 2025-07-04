@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Debug)
 
 find_package(OpenMP REQUIRED)
+find_package(TBB REQUIRED)
 
 add_subdirectory(algorithms/hnsw/hnswlib hnswlib)
 add_subdirectory(algorithms/parlayann/parlayann parlayann)
@@ -24,6 +25,7 @@ target_include_directories(index PRIVATE
     ${CMAKE_SOURCE_DIR}/../hnswlib
     ${CMAKE_SOURCE_DIR}/../parlayann
     ${CMAKE_SOURCE_DIR}/algorithms/vamana/diskann/include
+    ${TBB_INCLUDE_DIRS}
 )
 
 target_link_libraries(index PRIVATE
@@ -31,4 +33,5 @@ target_link_libraries(index PRIVATE
     ParlayANN
     diskann
     OpenMP::OpenMP_CXX
+    TBB::tbb
 )

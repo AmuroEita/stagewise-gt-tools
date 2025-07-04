@@ -40,4 +40,6 @@ class IndexBase {
 
     virtual int batch_search(const T* batch_queries, uint32_t k,
                              size_t num_queries, TagT** batch_results) = 0;
+
+    virtual void save_stat(const std::string& filename) {}
 };

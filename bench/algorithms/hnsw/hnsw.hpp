@@ -1,25 +1,28 @@
 #pragma once
 
+#include <omp.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+
 #include <chrono>
 #include <cstddef>
-#include <iostream>
-#include <omp.h>
-#include <vector>
 #include <fstream>
-#include <string>
+#include <iostream>
 #include <mutex>
+#include <string>
+#include <vector>
 
 #include "../index.hpp"
 #include "hnswlib/hnswlib/hnswlib.h"
-#include <tbb/task_arena.h>
-#include <tbb/parallel_for.h>
 
 template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t>
 class HNSW : public IndexBase<T, TagT, LabelT> {
    public:
     HNSW(size_t max_elements, size_t dim, size_t num_threads, size_t M,
          size_t ef_construction)
-        : dim_(dim), num_threads_(num_threads), space(dim),
+        : dim_(dim),
+          num_threads_(num_threads),
+          space(dim),
           arena_(num_threads) {
         index_ = new hnswlib::HierarchicalNSW<T>(&space, max_elements, M,
                                                  ef_construction);
@@ -88,6 +91,6 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
     hnswlib::L2Space space;
     hnswlib::HierarchicalNSW<T>* index_;
 
-private:
+   private:
     tbb::task_arena arena_;
 };

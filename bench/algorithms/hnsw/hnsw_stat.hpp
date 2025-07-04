@@ -1,13 +1,14 @@
 #pragma once
 
+#include <omp.h>
+
 #include <chrono>
 #include <cstddef>
-#include <iostream>
-#include <omp.h>
-#include <vector>
 #include <fstream>
-#include <string>
+#include <iostream>
 #include <mutex>
+#include <string>
+#include <vector>
 
 #include "../index.hpp"
 #include "hnswlib/hnswlib/hnswlib.h"
@@ -59,14 +60,18 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
                 index_->addPoint(batch_data + i * dim_, batch_tags[i]);
 #ifdef ENABLE_CC_STAT
                 auto t_work_end = std::chrono::high_resolution_clock::now();
-                thread_work_time[tid] += std::chrono::duration<double>(t_work_end - t_work_start).count();
+                thread_work_time[tid] +=
+                    std::chrono::duration<double>(t_work_end - t_work_start)
+                        .count();
 #endif
                 success_count++;
             }
 
 #ifdef ENABLE_CC_STAT
             auto t_total_end = std::chrono::high_resolution_clock::now();
-            thread_total_time[tid] += std::chrono::duration<double>(t_total_end - t_total_start).count();
+            thread_total_time[tid] +=
+                std::chrono::duration<double>(t_total_end - t_total_start)
+                    .count();
 #endif
         }
 
@@ -82,7 +87,8 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         double batch_cc_ratio = batch_cc_time / batch_total_time * 100.0;
         {
             std::lock_guard<std::mutex> lock(stat_mutex);
-            batch_stats_.push_back({"write", batch_total_time, batch_work_time, batch_cc_time, batch_cc_ratio});
+            batch_stats_.push_back({"write", batch_total_time, batch_work_time,
+                                    batch_cc_time, batch_cc_ratio});
         }
 #endif
 
@@ -135,12 +141,16 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
                 }
 #ifdef ENABLE_CC_STAT
                 auto t_work_end = std::chrono::high_resolution_clock::now();
-                thread_work_time[tid] += std::chrono::duration<double>(t_work_end - t_work_start).count();
+                thread_work_time[tid] +=
+                    std::chrono::duration<double>(t_work_end - t_work_start)
+                        .count();
 #endif
             }
 #ifdef ENABLE_CC_STAT
             auto t_total_end = std::chrono::high_resolution_clock::now();
-            thread_total_time[tid] += std::chrono::duration<double>(t_total_end - t_total_start).count();
+            thread_total_time[tid] +=
+                std::chrono::duration<double>(t_total_end - t_total_start)
+                    .count();
 #endif
         }
 
@@ -156,7 +166,8 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
         double batch_cc_ratio = batch_cc_time / batch_total_time * 100.0;
         {
             std::lock_guard<std::mutex> lock(stat_mutex);
-            batch_stats_.push_back({"read", batch_total_time, batch_work_time, batch_cc_time, batch_cc_ratio});
+            batch_stats_.push_back({"read", batch_total_time, batch_work_time,
+                                    batch_cc_time, batch_cc_ratio});
         }
 #endif
 
@@ -170,25 +181,24 @@ class HNSW : public IndexBase<T, TagT, LabelT> {
 
 #ifdef ENABLE_CC_STAT
     struct BatchStat {
-        std::string type; // "read" or "write"
+        std::string type;  // "read" or "write"
         double total_time;
         double work_time;
         double cc_time;
         double cc_ratio;
     };
     std::vector<BatchStat> batch_stats_;
-    
+
     std::mutex stat_mutex;
-    
+
     void save_stat(const std::string& filename) {
         std::ofstream ofs(filename);
-        ofs << "type,batch_total_time,batch_work_time,batch_cc_time,batch_cc_ratio" << std::endl;
+        ofs << "type,batch_total_time,batch_work_time,batch_cc_time,batch_cc_"
+               "ratio"
+            << std::endl;
         for (const auto& stat : batch_stats_) {
-            ofs << stat.type << ","
-                << stat.total_time << ","
-                << stat.work_time << ","
-                << stat.cc_time << ","
-                << stat.cc_ratio << std::endl;
+            ofs << stat.type << "," << stat.total_time << "," << stat.work_time
+                << "," << stat.cc_time << "," << stat.cc_ratio << std::endl;
         }
         ofs.close();
     }
